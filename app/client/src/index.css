@@ -1,0 +1,204 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #faf9fc;
+  --foreground: #1f1b2e;
+  --card: #ffffff;
+  --card-foreground: #1f1b2e;
+  --popover: #ffffff;
+  --popover-foreground: #1f1b2e;
+  --primary: #6c5dd3;
+  --primary-foreground: #ffffff;
+  --secondary: #e8e5f5;
+  --secondary-foreground: #1f1b2e;
+  --muted: #f3f2f7;
+  --muted-foreground: #8b86a3;
+  --accent: #f0edf9;
+  --accent-foreground: #6c5dd3;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e8e5f5;
+  --input: transparent;
+  --input-background: #f9f8fc;
+  --switch-background: #d4d0e8;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #6c5dd3;
+  --chart-1: #6c5dd3;
+  --chart-2: #a78bfa;
+  --chart-3: #7c3aed;
+  --chart-4: #c4b5fd;
+  --chart-5: #8b5cf6;
+  --radius: 1rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1f1b2e;
+  --sidebar-primary: #6c5dd3;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f9f8fc;
+  --sidebar-accent-foreground: #1f1b2e;
+  --sidebar-border: #e8e5f5;
+  --sidebar-ring: #6c5dd3;
+  
+  /* Mastodon-inspired purple gradients */
+  --gradient-primary: linear-gradient(135deg, #c4b5fd 0%, #6c5dd3 100%);
+  --gradient-secondary: linear-gradient(135deg, #f0edf9 0%, #e8e5f5 100%);
+  --gradient-accent: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+}
+
+.dark {
+  --background: #1a1625;
+  --foreground: #f9f8fc;
+  --card: #241f30;
+  --card-foreground: #f9f8fc;
+  --popover: #241f30;
+  --popover-foreground: #f9f8fc;
+  --primary: #a78bfa;
+  --primary-foreground: #1a1625;
+  --secondary: #2d2640;
+  --secondary-foreground: #f9f8fc;
+  --muted: #2d2640;
+  --muted-foreground: #a89cb8;
+  --accent: #352d48;
+  --accent-foreground: #a78bfa;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #352d48;
+  --input: transparent;
+  --input-background: #2d2640;
+  --ring: #a78bfa;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: #a78bfa;
+  --chart-2: #c4b5fd;
+  --chart-3: #8b5cf6;
+  --chart-4: #7c3aed;
+  --chart-5: #6c5dd3;
+  --sidebar: #1f1a2e;
+  --sidebar-foreground: #f9f8fc;
+  --sidebar-primary: #a78bfa;
+  --sidebar-primary-foreground: #1a1625;
+  --sidebar-accent: #2d2640;
+  --sidebar-accent-foreground: #f9f8fc;
+  --sidebar-border: #352d48;
+  --sidebar-ring: #a78bfa;
+  
+  /* Dark mode gradients */
+  --gradient-primary: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  --gradient-secondary: linear-gradient(135deg, #2d2640 0%, #352d48 100%);
+  --gradient-accent: linear-gradient(135deg, #6c5dd3 0%, #8b5cf6 100%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
