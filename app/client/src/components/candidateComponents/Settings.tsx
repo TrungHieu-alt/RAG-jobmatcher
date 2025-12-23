@@ -1,13 +1,74 @@
-import { User, Bell, Shield, Globe, Palette } from 'lucide-react';
-import { useState } from 'react';
+import { User, Bell, Shield, Palette } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  getUser,
+  getCandidateProfile,
+  updateCandidateProfile,
+  type CandidateProfileResponse,
+} from "@/api/users";
 
 export default function Settings() {
+  const userId = Number(localStorage.getItem("user_id"));
+
+  const [loaded, setLoaded] = useState(false);
+
+  // Candidate Profile States
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [location, setLocation] = useState("");
+  const [experience, setExperience] = useState("");
+  const [summary, setSummary] = useState("");
+
+  // Fake notification UI (unchanged from your template)
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
     jobMatches: true,
     messages: true,
   });
+
+  // ======================================================
+  // LOAD CANDIDATE PROFILE
+  // ======================================================
+  useEffect(() => {
+    async function load() {
+      const user = await getUser(userId);
+      if (user.role !== "candidate") {
+        console.error("User is not a candidate!");
+        return;
+      }
+
+      setEmail(user.email);
+
+      const profile: CandidateProfileResponse = await getCandidateProfile(userId);
+      setFullName(profile.full_name ?? "");
+      setLocation(profile.location ?? "");
+      setExperience(profile.experience_years ?? "");
+      setSummary(profile.summary ?? "");
+
+      setLoaded(true);
+    }
+
+    load();
+  }, [userId]);
+
+  // ======================================================
+  // SAVE PROFILE
+  // ======================================================
+  async function handleSave() {
+    await updateCandidateProfile(userId, {
+      full_name: fullName,
+      location,
+      experience,
+      skills: null, // vì Settings không chỉnh
+      bio: summary,
+    });
+
+    alert("Profile updated successfully!");
+  }
+
+  if (!loaded)
+    return <div className="p-6 text-muted-foreground">Loading profile…</div>;
 
   return (
     <div className="space-y-6">
@@ -25,49 +86,73 @@ export default function Settings() {
             </div>
             <div>
               <h3>Profile Settings</h3>
-              <p className="text-muted-foreground text-sm">Update your personal information</p>
+              <p className="text-muted-foreground text-sm">
+                Update your personal information
+              </p>
             </div>
           </div>
+
           <div className="p-6 space-y-4">
             <div>
               <label className="text-sm mb-2 block">Full Name</label>
               <input
                 type="text"
-                defaultValue="John Doe"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 className="w-full px-4 py-2.5 bg-input-background rounded-xl border border-transparent focus:border-primary focus:outline-none"
               />
             </div>
+
             <div>
               <label className="text-sm mb-2 block">Email Address</label>
               <input
                 type="email"
-                defaultValue="john.doe@email.com"
-                className="w-full px-4 py-2.5 bg-input-background rounded-xl border border-transparent focus:border-primary focus:outline-none"
+                value={email}
+                readOnly
+                className="w-full px-4 py-2.5 bg-input-background rounded-xl border border-transparent opacity-60 cursor-not-allowed"
               />
             </div>
-            <div>
-              <label className="text-sm mb-2 block">Phone Number</label>
-              <input
-                type="tel"
-                defaultValue="+1 (555) 123-4567"
-                className="w-full px-4 py-2.5 bg-input-background rounded-xl border border-transparent focus:border-primary focus:outline-none"
-              />
-            </div>
+
             <div>
               <label className="text-sm mb-2 block">Location</label>
               <input
                 type="text"
-                defaultValue="San Francisco, CA"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
                 className="w-full px-4 py-2.5 bg-input-background rounded-xl border border-transparent focus:border-primary focus:outline-none"
               />
             </div>
-            <button className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity">
+
+            <div>
+              <label className="text-sm mb-2 block">Experience (Years)</label>
+              <input
+                type="text"
+                value={experience}
+                onChange={(e) => setExperience(e.target.value)}
+                placeholder="Example: 1, 2, 3..."
+                className="w-full px-4 py-2.5 bg-input-background rounded-xl border border-transparent focus:border-primary focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm mb-2 block">Short Bio</label>
+              <textarea
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                className="w-full px-4 py-2.5 min-h-28 bg-input-background rounded-xl border border-transparent focus:border-primary focus:outline-none"
+              />
+            </div>
+
+            <button
+              onClick={handleSave}
+              className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity"
+            >
               Save Changes
             </button>
           </div>
         </div>
 
-        {/* Notification Settings */}
+        {/* Notification Settings (unchanged) */}
         <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="p-6 border-b border-border flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -75,70 +160,35 @@ export default function Settings() {
             </div>
             <div>
               <h3>Notification Preferences</h3>
-              <p className="text-muted-foreground text-sm">Choose how you want to be notified</p>
+              <p className="text-muted-foreground text-sm">
+                Choose how you want to be notified
+              </p>
             </div>
           </div>
+
+          {/* giữ nguyên UI switch */}
           <div className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p>Email Notifications</p>
-                <p className="text-sm text-muted-foreground">Receive updates via email</p>
+            {Object.entries(notifications).map(([key, value]) => (
+              <div className="flex items-center justify-between" key={key}>
+                <div>
+                  <p>{key}</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={value}
+                    onChange={(e) =>
+                      setNotifications({
+                        ...notifications,
+                        [key]: e.target.checked,
+                      })
+                    }
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 peer-checked:bg-primary transition-all"></div>
+                </label>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notifications.email}
-                  onChange={(e) => setNotifications({ ...notifications, email: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-              </label>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p>Push Notifications</p>
-                <p className="text-sm text-muted-foreground">Get instant notifications</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notifications.push}
-                  onChange={(e) => setNotifications({ ...notifications, push: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-              </label>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p>Job Match Alerts</p>
-                <p className="text-sm text-muted-foreground">Notify when new jobs match your profile</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notifications.jobMatches}
-                  onChange={(e) => setNotifications({ ...notifications, jobMatches: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-              </label>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p>Message Notifications</p>
-                <p className="text-sm text-muted-foreground">Alerts for new chat messages</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notifications.messages}
-                  onChange={(e) => setNotifications({ ...notifications, messages: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-              </label>
-            </div>
+            ))}
           </div>
         </div>
 

@@ -1,302 +1,245 @@
 import { useState } from 'react';
-import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
+import { Card, CardContent, CardHeader } from '../ui/card';
 import { Textarea } from '../ui/textarea';
-import { 
-  Save,
-  Send,
-} from 'lucide-react';
-import { Separator } from '../ui/separator';
+import { Input } from '../ui/input';
+import { MapPin, Building2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { uploadJobText } from '../../api/jobs';
 
 export function JobPosts() {
-  const [jobType, setJobType] = useState<'remote' | 'onsite' | 'hybrid'>('remote');
-  const [status, setStatus] = useState<'Open' | 'Closed'>('Open');
-  
-  // Form state
-  const [formData, setFormData] = useState({
-    title: '',
-    roleSummary: '',
-    responsibilities: '',
-    requirements: '',
-    benefits: '',
-    workingTime: '',
-    probationaryPeriod: '',
-    location: '',
-    dueDate: '',
-  });
+  // Form fields
+  const [jobTitle, setJobTitle] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [location, setLocation] = useState('');
+  const [descriptionText, setDescriptionText] = useState('');
+  const [jobType, setJobType] = useState('Full-time');
+  const [experienceLevel, setExperienceLevel] = useState('Mid-level');
+  const [salaryMin, setSalaryMin] = useState('');
+  const [salaryMax, setSalaryMax] = useState('');
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // State management
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const getRecruiterIdFromStorage = (): number | null => {
+    const v = localStorage.getItem("user_id");
+    if (!v) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
   };
 
+  const handleSaveJobPost = async () => {
+    // Validation
+    if (!jobTitle.trim()) {
+      toast.error("Job title is required");
+      return;
+    }
 
+    if (!descriptionText.trim()) {
+      toast.error("Job description is required");
+      return;
+    }
+
+    if (!location.trim()) {
+      toast.error("Location is required");
+      return;
+    }
+
+    const recruiterId = getRecruiterIdFromStorage();
+    if (!recruiterId) {
+      toast.error("No recruiter_id found. Please log in.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await uploadJobText(
+        recruiterId,
+        descriptionText,
+        {
+          title: jobTitle,
+          role: jobTitle, // Use title as role if not specified
+          location: location,
+          job_type: jobType,
+          experience_level: experienceLevel,
+          salary_min: salaryMin ? parseFloat(salaryMin) : null,
+          salary_max: salaryMax ? parseFloat(salaryMax) : null,
+        }
+      );
+
+      // Success
+      toast.success(`Job "${result.title}" posted successfully!`);
+      
+      // Reset form
+      setJobTitle('');
+      setCompanyName('');
+      setLocation('');
+      setDescriptionText('');
+      setJobType('Full-time');
+      setExperienceLevel('Mid-level');
+      setSalaryMin('');
+      setSalaryMax('');
+    } catch (err: any) {
+      const msg = err?.message || "Failed to post job";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="max-w-[900px] mx-auto space-y-6 pb-4">
-      {/* Header */}
-      <div className="space-y-1">
-        <h2>Job Post Editor</h2>
-        <p className="text-muted-foreground">Create or edit a job posting</p>
+    <div className="space-y-6">
+      <div>
+        <h2>Create a Job Post</h2>
+        <p className="text-muted-foreground">Create and preview how your job post appears to candidates</p>
       </div>
 
-      {/* Form Container */}
-      <Card className="rounded-2xl border-border shadow-sm">
-        <CardContent className="p-8  space-y-8">
-          {/* Basic Information Section */}
-          <div className="space-y-6">
-            <div>
-              <h3 className="mb-4">Basic Information</h3>
-              <Separator className="mb-6" />
-            </div>
-
-            {/* Job Title */}
-            <div className="space-y-2">
-              <Label htmlFor="title" className="text-sm">Job Title *</Label>
+      <div className="w-full max-w-4xl mx-auto">
+        {/* Main Card Container */}
+        <Card className="rounded-2xl border-border shadow-sm overflow-hidden">
+          
+          {/* Header Section */}
+          <CardHeader className="pb-4">
+            <div className="flex items-start justify-between mb-4 gap-2 border-b border-border pb-4">
               <Input
-                id="title"
-                placeholder="e.g. Senior React Developer"
-                value={formData.title}
-                onChange={(e) => handleInputChange('title', e.target.value)}
-                className="rounded-xl h-11"
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                className="flex-1 border-0 bg-transparent hover:bg-accent/30 focus:bg-accent/50 rounded-xl px-3 py-2 transition-colors !text-2xl font-black h-15 text-[#a332ff]"
+                placeholder="Job Title"
               />
             </div>
 
-            {/* Role Summary */}
-            <div className="space-y-2">
-              <Label htmlFor="role-summary" className="text-sm">Role Summary *</Label>
-              <Textarea
-                id="role-summary"
-                placeholder="Briefly describe the role and what you're looking for..."
-                value={formData.roleSummary}
-                onChange={(e) => handleInputChange('roleSummary', e.target.value)}
-                className="rounded-xl min-h-[100px] resize-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                This will be the main text of your Mastodon post
-              </p>
-            </div>
-
-            {/* Status */}
-            <div className="space-y-3">
-              <Label className="text-sm">Status *</Label>
-              <div className="grid grid-cols-2 gap-3 max-w-xs">
-                <Button
-                  type="button"
-                  variant={status === 'Open' ? 'default' : 'outline'}
-                  onClick={() => setStatus('Open')}
-                  className={`rounded-xl h-11 ${
-                    status === 'Open' 
-                      ? 'bg-linear-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700' 
-                      : ''
-                  }`}
-                >
-                  Open
-                </Button>
-                <Button
-                  type="button"
-                  variant={status === 'Closed' ? 'default' : 'outline'}
-                  onClick={() => setStatus('Closed')}
-                  className={`rounded-xl h-11 ${
-                    status === 'Closed' 
-                      ? 'bg-linear-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700' 
-                      : ''
-                  }`}
-                >
-                  Closed
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Responsibilities Section */}
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="responsibilities" className="text-sm">Responsibilities *</Label>
-              <Textarea
-                id="responsibilities"
-                placeholder="Enter each responsibility on a new line...&#10;Example:&#10;Lead frontend development&#10;Mentor junior developers&#10;Review code and design"
-                value={formData.responsibilities}
-                onChange={(e) => handleInputChange('responsibilities', e.target.value)}
-                className="rounded-xl min-h-[140px] resize-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                Each line will be formatted as a bullet point in the preview
-              </p>
-            </div>
-          </div>
-
-          {/* Requirements Section */}
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="requirements" className="text-sm">Requirements *</Label>
-              <Textarea
-                id="requirements"
-                placeholder="Enter each requirement on a new line...&#10;Example:&#10;5+ years React experience&#10;Strong TypeScript skills&#10;Experience with Node.js"
-                value={formData.requirements}
-                onChange={(e) => handleInputChange('requirements', e.target.value)}
-                className="rounded-xl min-h-[140px] resize-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                Each line will be formatted as a bullet point in the preview
-              </p>
-            </div>
-          </div>
-
-          {/* Benefits Section */}
-          <div className="space-y-6"> 
-            <div className="grid gap-6">
-              {/* Benefits */}
-              <div className="space-y-2">
-                <Label htmlFor="benefits" className="text-sm">Benefits *</Label>
-                <Textarea
-                  id="benefits"
-                  placeholder="Describe the benefits and perks offered..."
-                  value={formData.benefits}
-                  onChange={(e) => handleInputChange('benefits', e.target.value)}
-                  className="rounded-xl min-h-[100px] resize-none"
-                />
-              </div>
-
-              {/* Working Time & Probation */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="working-time" className="text-sm">Working Time</Label>
-                  <Input
-                    id="working-time"
-                    placeholder="e.g. 9:00 AM - 5:00 PM"
-                    value={formData.workingTime}
-                    onChange={(e) => handleInputChange('workingTime', e.target.value)}
-                    className="rounded-xl h-11"
-                  />
+            {/* Company Info */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-6 h-6 text-white" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="probation" className="text-sm">Probationary Period</Label>
+                <div className="flex-1 min-w-0 space-y-1.5">
                   <Input
-                    id="probation"
-                    placeholder="e.g. 3 months"
-                    value={formData.probationaryPeriod}
-                    onChange={(e) => handleInputChange('probationaryPeriod', e.target.value)}
-                    className="rounded-xl h-11"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="w-full border-0 bg-transparent hover:bg-accent/30 focus:bg-accent/50 rounded-lg px-2 py-1 text-sm transition-colors h-auto"
+                    placeholder="Company Name"
                   />
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <Input
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      className="flex-1 border-0 bg-transparent hover:bg-accent/30 focus:bg-accent/50 rounded-lg px-2 py-1 text-sm text-muted-foreground transition-colors h-auto min-w-0"
+                      placeholder="Location"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
+          </CardHeader>
+
+          {/* Description Section */}
+          <div className="p-5 border-t border-border">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl text-purple-700 ml-3 font-bold">Job Description</span>
+            </div>
+
+            <Textarea
+              value={descriptionText}
+              onChange={(e) => setDescriptionText(e.target.value)}
+              placeholder="Type job description here…"
+              className="w-full min-h-[180px] bg-accent/50 border-border rounded-2xl p-4 resize-none focus:ring-2 focus:ring-primary/20 transition-all text-sm leading-relaxed"
+              style={{
+                height: "auto",
+                minHeight: "180px",
+              }}
+            />
           </div>
 
-          {/* Job Settings Section */}
-          <div className="space-y-6">
-            <div className="grid gap-6">
+          {/* Job Details Section */}
+          <div className="p-5 border-t border-border space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Job Type */}
-              <div className="space-y-3">
-                <Label className="text-sm">Job Type *</Label>
-                <div className="grid grid-cols-3 gap-3">
-                  <Button
-                    type="button"
-                    variant={jobType === 'remote' ? 'default' : 'outline'}
-                    onClick={() => setJobType('remote')}
-                    className={`rounded-xl h-11 ${
-                      jobType === 'remote' 
-                        ? 'bg-linear-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700' 
-                        : ''
-                    }`}
-                  >
-                    Remote
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={jobType === 'onsite' ? 'default' : 'outline'}
-                    onClick={() => setJobType('onsite')}
-                    className={`rounded-xl h-11 ${
-                      jobType === 'onsite' 
-                        ? 'bg-linear-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700' 
-                        : ''
-                    }`}
-                  >
-                    Onsite
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={jobType === 'hybrid' ? 'default' : 'outline'}
-                    onClick={() => setJobType('hybrid')}
-                    className={`rounded-xl h-11 ${
-                      jobType === 'hybrid' 
-                        ? 'bg-linear-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700' 
-                        : ''
-                    }`}
-                  >
-                    Hybrid
-                  </Button>
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-muted-foreground">Job Type</label>
+                <select
+                  value={jobType}
+                  onChange={(e) => setJobType(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-input border border-border rounded-xl focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors"
+                >
+                  <option value="Full-time">Full-time</option>
+                  <option value="Part-time">Part-time</option>
+                  <option value="Contract">Contract</option>
+                  <option value="Temporary">Temporary</option>
+                  <option value="Internship">Internship</option>
+                </select>
               </div>
 
-              {/* Application Deadline */}
-              <div className="space-y-2">
-                <Label htmlFor="due-date" className="text-sm">Application Deadline</Label>
+              {/* Experience Level */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-muted-foreground">Experience Level</label>
+                <select
+                  value={experienceLevel}
+                  onChange={(e) => setExperienceLevel(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-input border border-border rounded-xl focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors"
+                >
+                  <option value="Entry-level">Entry-level</option>
+                  <option value="Mid-level">Mid-level</option>
+                  <option value="Senior">Senior</option>
+                  <option value="Executive">Executive</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Salary Range */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-muted-foreground">Salary Min</label>
                 <Input
-                  id="due-date"
-                  type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => handleInputChange('dueDate', e.target.value)}
-                  className="rounded-xl h-11 max-w-xs"
+                  type="number"
+                  value={salaryMin}
+                  onChange={(e) => setSalaryMin(e.target.value)}
+                  placeholder="e.g., 50000"
+                  className="w-full px-4 py-2.5 bg-input border border-border rounded-xl focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Last date to accept applications for this position
-                </p>
               </div>
 
-              {/* Location */}
-              <div className="space-y-2">
-                <Label htmlFor="location" className="text-sm">Location</Label>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-muted-foreground">Salary Max</label>
                 <Input
-                  id="location"
-                  placeholder="e.g. San Francisco, CA or Remote"
-                  value={formData.location}
-                  onChange={(e) => handleInputChange('location', e.target.value)}
-                  className="rounded-xl h-11"
+                  type="number"
+                  value={salaryMax}
+                  onChange={(e) => setSalaryMax(e.target.value)}
+                  placeholder="e.g., 100000"
+                  className="w-full px-4 py-2.5 bg-input border border-border rounded-xl focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Physical location or specify if remote
-                </p>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mx-5 mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+              <p className="text-sm text-destructive">{error}</p>
+            </div>
+          )}
 
-      {/* Action Buttons */}
-      <Card className="rounded-2xl shadow-sm sticky bottom-0  backdrop-blur-sm">
-        <CardContent className="p-4">
-          <div className="flex gap-3">
-            <Button
-              type="button"
-              onClick={() => {/* Navigation will be handled by parent */}}
-              variant="outline"
-              className="rounded-xl h-11 px-6"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl h-11 px-6 flex-1"
-              onClick={() => {/* Save draft logic */}}
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save Draft
-            </Button>
-            <Button
-              type="submit"
-              className="bg-linear-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 rounded-xl h-11 px-6 flex-1"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              Publish to Mastodon
-            </Button>
+          {/* Footer Actions */}
+          <div className="p-6 pt-4 border-t border-border">
+            <div className="flex gap-3">
+              <Button
+                onClick={handleSaveJobPost}
+                disabled={isLoading}
+                className="flex-1 h-11 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? "Saving..." : "Save Job Post"}
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

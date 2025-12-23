@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Download, Save } from 'lucide-react';
+import { Download, Save, ArrowLeft } from 'lucide-react';
 
-export default function CreateCV() {
+export default function CreateCV({ onNavigateBack }) {
   const [template, setTemplate] = useState<'elegant' | 'modern' | 'minimalist'>('modern');
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
 
@@ -59,42 +59,70 @@ export default function CreateCV() {
 
   const currentTemplate = templates[template];
 
+  const handleAddSkill = () => {
+    const newSkill = prompt('Enter a new skill:');
+    if (newSkill && newSkill.trim()) {
+      setCvData({
+        ...cvData,
+        skills: [...cvData.skills, newSkill.trim()],
+      });
+    }
+  };
+
+  const handleRemoveSkill = (idx: number) => {
+    setCvData({
+      ...cvData,
+      skills: cvData.skills.filter((_, i) => i !== idx),
+    });
+  };
+
   return (
     <div className="space-y-6">
+      {/* Header with Back Button */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2>Create CV</h2>
-          <p className="text-muted-foreground">Design your professional resume</p>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onNavigateBack}
+            className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors"
+            title="Go back to My CVs"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold">Create CV</h2>
+            <p className="text-muted-foreground">Design your professional resume</p>
+          </div>
         </div>
         <div className="flex gap-3">
           <button
             onClick={() => setShowTemplateSelector(true)}
-            className="px-6 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors"
+            className="px-6 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors font-medium"
           >
             Change Template
           </button>
-          <button className="flex items-center gap-2 px-6 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors">
+          <button className="flex items-center gap-2 px-6 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors font-medium">
             <Save className="w-4 h-4" />
             Save CV
           </button>
-          <button className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity">
+          <button className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity font-medium">
             <Download className="w-4 h-4" />
             Export PDF
           </button>
         </div>
       </div>
 
-      {/* CV Preview */}
-      <div className="flex justify-center">
-        <div className={`bg-white shadow-2xl rounded-lg w-[210mm] min-h-[297mm] p-16 ${currentTemplate.font}`}>
+      {/* Main Content - Preview */}
+      <div className="flex justify-center bg-muted/50 rounded-2xl p-8 min-h-screen">
+        <div className={`bg-white shadow-2xl rounded-2xl w-[210mm] min-h-[297mm] p-16 ${currentTemplate.font}`}>
           {/* Header */}
           <div className="mb-8">
-            <div className={`bg-linear-to-r ${currentTemplate.primaryColor} text-white p-8 -mx-16 -mt-16 mb-8 rounded-t-lg`}>
+            <div className={`bg-gradient-to-r ${currentTemplate.primaryColor} text-white p-8 -mx-16 -mt-16 mb-8 rounded-t-2xl`}>
               <input
                 type="text"
                 value={cvData.name}
                 onChange={(e) => setCvData({ ...cvData, name: e.target.value })}
-                className="bg-transparent border-none outline-none w-full text-4xl mb-2 placeholder-white/70"
+                className="bg-transparent border-none outline-none w-full text-4xl font-bold mb-2 placeholder-white/70"
                 placeholder="Your Name"
               />
               <input
@@ -106,169 +134,192 @@ export default function CreateCV() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-              <input
-                type="text"
-                value={cvData.email}
-                onChange={(e) => setCvData({ ...cvData, email: e.target.value })}
-                className="bg-transparent border-b border-gray-300 outline-none py-1"
-                placeholder="Email"
-              />
-              <input
-                type="text"
-                value={cvData.phone}
-                onChange={(e) => setCvData({ ...cvData, phone: e.target.value })}
-                className="bg-transparent border-b border-gray-300 outline-none py-1"
-                placeholder="Phone"
-              />
-              <input
-                type="text"
-                value={cvData.location}
-                onChange={(e) => setCvData({ ...cvData, location: e.target.value })}
-                className="bg-transparent border-b border-gray-300 outline-none py-1 col-span-2"
-                placeholder="Location"
-              />
+            <div className="grid grid-cols-2 gap-6 text-sm text-gray-600">
+              <div>
+                <label className="block text-xs font-semibold mb-1 text-gray-500">EMAIL</label>
+                <input
+                  type="email"
+                  value={cvData.email}
+                  onChange={(e) => setCvData({ ...cvData, email: e.target.value })}
+                  className="bg-transparent border-b border-gray-300 outline-none py-2 w-full hover:border-gray-400"
+                  placeholder="Email"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1 text-gray-500">PHONE</label>
+                <input
+                  type="tel"
+                  value={cvData.phone}
+                  onChange={(e) => setCvData({ ...cvData, phone: e.target.value })}
+                  className="bg-transparent border-b border-gray-300 outline-none py-2 w-full hover:border-gray-400"
+                  placeholder="Phone"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold mb-1 text-gray-500">LOCATION</label>
+                <input
+                  type="text"
+                  value={cvData.location}
+                  onChange={(e) => setCvData({ ...cvData, location: e.target.value })}
+                  className="bg-transparent border-b border-gray-300 outline-none py-2 w-full hover:border-gray-400"
+                  placeholder="Location"
+                />
+              </div>
             </div>
           </div>
 
           {/* Summary */}
-          <div className="mb-6">
-            <h3 className={`text-xl mb-3 ${currentTemplate.accentColor}`}>Professional Summary</h3>
-            <textarea
-              value={cvData.summary}
-              onChange={(e) => setCvData({ ...cvData, summary: e.target.value })}
-              className="w-full bg-transparent border border-gray-300 rounded p-3 outline-none text-gray-700 resize-none"
-              rows={4}
-              placeholder="Write a brief summary about yourself..."
-            />
-          </div>
+          {cvData.summary && (
+            <div className="mb-8">
+              <h3 className={`text-lg font-bold mb-3 pb-2 border-b-2 ${currentTemplate.accentColor}`}>Professional Summary</h3>
+              <textarea
+                value={cvData.summary}
+                onChange={(e) => setCvData({ ...cvData, summary: e.target.value })}
+                className="w-full bg-transparent outline-none text-gray-700 text-sm leading-relaxed resize-none"
+                rows={4}
+                placeholder="Write a brief summary about yourself..."
+              />
+            </div>
+          )}
 
           {/* Experience */}
-          <div className="mb-6">
-            <h3 className={`text-xl mb-3 ${currentTemplate.accentColor}`}>Experience</h3>
-            <div className="space-y-4">
-              {cvData.experience.map((exp, idx) => (
-                <div key={idx} className="border-l-2 border-gray-300 pl-4">
-                  <input
-                    type="text"
-                    value={exp.title}
-                    onChange={(e) => {
-                      const newExp = [...cvData.experience];
-                      newExp[idx].title = e.target.value;
-                      setCvData({ ...cvData, experience: newExp });
-                    }}
-                    className="bg-transparent border-b border-gray-300 outline-none w-full mb-1"
-                    placeholder="Job Title"
-                  />
-                  <div className="flex gap-4 mb-2">
-                    <input
-                      type="text"
-                      value={exp.company}
+          {cvData.experience.length > 0 && (
+            <div className="mb-8">
+              <h3 className={`text-lg font-bold mb-4 pb-2 border-b-2 ${currentTemplate.accentColor}`}>Experience</h3>
+              <div className="space-y-6">
+                {cvData.experience.map((exp, idx) => (
+                  <div key={idx} className="border-l-4 border-gray-300 pl-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <input
+                          type="text"
+                          value={exp.title}
+                          onChange={(e) => {
+                            const newExp = [...cvData.experience];
+                            newExp[idx].title = e.target.value;
+                            setCvData({ ...cvData, experience: newExp });
+                          }}
+                          className="bg-transparent border-none outline-none text-base font-semibold text-gray-800"
+                          placeholder="Job Title"
+                        />
+                        <div className="flex gap-4 mt-1">
+                          <input
+                            type="text"
+                            value={exp.company}
+                            onChange={(e) => {
+                              const newExp = [...cvData.experience];
+                              newExp[idx].company = e.target.value;
+                              setCvData({ ...cvData, experience: newExp });
+                            }}
+                            className="bg-transparent border-none outline-none text-sm text-gray-600 font-medium"
+                            placeholder="Company"
+                          />
+                          <span className="text-gray-400">•</span>
+                          <input
+                            type="text"
+                            value={exp.period}
+                            onChange={(e) => {
+                              const newExp = [...cvData.experience];
+                              newExp[idx].period = e.target.value;
+                              setCvData({ ...cvData, experience: newExp });
+                            }}
+                            className="bg-transparent border-none outline-none text-sm text-gray-600"
+                            placeholder="Period"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <textarea
+                      value={exp.description}
                       onChange={(e) => {
                         const newExp = [...cvData.experience];
-                        newExp[idx].company = e.target.value;
+                        newExp[idx].description = e.target.value;
                         setCvData({ ...cvData, experience: newExp });
                       }}
-                      className="bg-transparent border-b border-gray-300 outline-none flex-1 text-sm text-gray-600"
-                      placeholder="Company"
-                    />
-                    <input
-                      type="text"
-                      value={exp.period}
-                      onChange={(e) => {
-                        const newExp = [...cvData.experience];
-                        newExp[idx].period = e.target.value;
-                        setCvData({ ...cvData, experience: newExp });
-                      }}
-                      className="bg-transparent border-b border-gray-300 outline-none w-40 text-sm text-gray-600"
-                      placeholder="Period"
+                      className="w-full bg-transparent outline-none text-sm text-gray-700 leading-relaxed resize-none"
+                      rows={2}
+                      placeholder="Description"
                     />
                   </div>
-                  <textarea
-                    value={exp.description}
-                    onChange={(e) => {
-                      const newExp = [...cvData.experience];
-                      newExp[idx].description = e.target.value;
-                      setCvData({ ...cvData, experience: newExp });
-                    }}
-                    className="w-full bg-transparent border border-gray-300 rounded p-2 outline-none text-sm text-gray-700 resize-none"
-                    rows={2}
-                    placeholder="Description"
-                  />
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Education */}
-          <div className="mb-6">
-            <h3 className={`text-xl mb-3 ${currentTemplate.accentColor}`}>Education</h3>
-            <div className="space-y-3">
-              {cvData.education.map((edu, idx) => (
-                <div key={idx}>
-                  <input
-                    type="text"
-                    value={edu.degree}
-                    onChange={(e) => {
-                      const newEdu = [...cvData.education];
-                      newEdu[idx].degree = e.target.value;
-                      setCvData({ ...cvData, education: newEdu });
-                    }}
-                    className="bg-transparent border-b border-gray-300 outline-none w-full mb-1"
-                    placeholder="Degree"
-                  />
-                  <div className="flex gap-4">
+          {cvData.education.length > 0 && (
+            <div className="mb-8">
+              <h3 className={`text-lg font-bold mb-4 pb-2 border-b-2 ${currentTemplate.accentColor}`}>Education</h3>
+              <div className="space-y-4">
+                {cvData.education.map((edu, idx) => (
+                  <div key={idx}>
                     <input
                       type="text"
-                      value={edu.school}
+                      value={edu.degree}
                       onChange={(e) => {
                         const newEdu = [...cvData.education];
-                        newEdu[idx].school = e.target.value;
+                        newEdu[idx].degree = e.target.value;
                         setCvData({ ...cvData, education: newEdu });
                       }}
-                      className="bg-transparent border-b border-gray-300 outline-none flex-1 text-sm text-gray-600"
-                      placeholder="School"
+                      className="bg-transparent border-none outline-none text-base font-semibold text-gray-800"
+                      placeholder="Degree"
                     />
-                    <input
-                      type="text"
-                      value={edu.year}
-                      onChange={(e) => {
-                        const newEdu = [...cvData.education];
-                        newEdu[idx].year = e.target.value;
-                        setCvData({ ...cvData, education: newEdu });
-                      }}
-                      className="bg-transparent border-b border-gray-300 outline-none w-24 text-sm text-gray-600"
-                      placeholder="Year"
-                    />
+                    <div className="flex gap-4 mt-1">
+                      <input
+                        type="text"
+                        value={edu.school}
+                        onChange={(e) => {
+                          const newEdu = [...cvData.education];
+                          newEdu[idx].school = e.target.value;
+                          setCvData({ ...cvData, education: newEdu });
+                        }}
+                        className="bg-transparent border-none outline-none text-sm text-gray-600 font-medium flex-1"
+                        placeholder="School"
+                      />
+                      <span className="text-gray-400">•</span>
+                      <input
+                        type="text"
+                        value={edu.year}
+                        onChange={(e) => {
+                          const newEdu = [...cvData.education];
+                          newEdu[idx].year = e.target.value;
+                          setCvData({ ...cvData, education: newEdu });
+                        }}
+                        className="bg-transparent border-none outline-none text-sm text-gray-600"
+                        placeholder="Year"
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Skills */}
-          <div>
-            <h3 className={`text-xl mb-3 ${currentTemplate.accentColor}`}>Skills</h3>
-            <div className="flex flex-wrap gap-2">
-              {cvData.skills.map((skill, idx) => (
-                <span
-                  key={idx}
-                  className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
-                >
-                  {skill}
-                </span>
-              ))}
+          {cvData.skills.length > 0 && (
+            <div>
+              <h3 className={`text-lg font-bold mb-4 pb-2 border-b-2 ${currentTemplate.accentColor}`}>Skills</h3>
+              <div className="flex flex-wrap gap-2">
+                {cvData.skills.map((skill, idx) => (
+                  <span
+                    key={idx}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       {/* Template Selector Modal */}
       {showTemplateSelector && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
-          <div className="bg-card rounded-2xl max-w-2xl w-full p-6">
-            <h3 className="mb-4">Choose Template</h3>
-            <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-card rounded-2xl max-w-2xl w-full p-8 shadow-2xl">
+            <h3 className="text-2xl font-bold mb-6">Choose Template</h3>
+            <div className="grid grid-cols-3 gap-6 mb-8">
               {Object.entries(templates).map(([key, tmpl]) => (
                 <button
                   key={key}
@@ -276,20 +327,20 @@ export default function CreateCV() {
                     setTemplate(key as any);
                     setShowTemplateSelector(false);
                   }}
-                  className={`p-4 rounded-xl border-2 transition-all ${
+                  className={`p-6 rounded-xl border-2 transition-all ${
                     template === key
-                      ? 'border-primary bg-primary/10'
+                      ? 'border-primary bg-primary/10 shadow-lg'
                       : 'border-border hover:border-primary/50'
                   }`}
                 >
-                  <div className={`h-32 bg-linear-to-br ${tmpl.primaryColor} rounded-lg mb-3`}></div>
-                  <p className="text-center">{tmpl.name}</p>
+                  <div className={`h-40 bg-gradient-to-br ${tmpl.primaryColor} rounded-lg mb-4`}></div>
+                  <p className="text-center font-semibold">{tmpl.name}</p>
                 </button>
               ))}
             </div>
             <button
               onClick={() => setShowTemplateSelector(false)}
-              className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity"
+              className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity font-medium"
             >
               Close
             </button>

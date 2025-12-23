@@ -276,6 +276,7 @@ export function RecruiterFlow({ step, data, onNext, onBack }: RecruiterFlowProps
   // Step 5: Completion
   if (step === 5) {
     async function finish() {
+      console.log("1");
       const userId = Number(localStorage.getItem("user_id"));
 
       await createRecruiterProfile(userId, {

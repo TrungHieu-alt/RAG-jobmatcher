@@ -23,6 +23,11 @@ class RecruiterRepository:
         return await RecruiterProfile.find_one(RecruiterProfile.user_id == user_id)
 
     @staticmethod
+    async def get_by_id(user_id: int) -> Optional[RecruiterProfile]:
+        """Alias for get_by_user_id for compatibility"""
+        return await RecruiterProfile.find_one(RecruiterProfile.user_id == user_id)
+
+    @staticmethod
     async def update(user_id: int, **kwargs) -> Optional[RecruiterProfile]:
         profile = await RecruiterProfile.find_one(RecruiterProfile.user_id == user_id)
         if profile:

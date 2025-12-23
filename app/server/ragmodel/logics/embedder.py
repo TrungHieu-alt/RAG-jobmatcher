@@ -1,135 +1,73 @@
-# ============================================
-#           EMBEDDER FINAL VERSION
-#    Multi-field Embedding for CV & JD
-# ============================================
-
-from sentence_transformers import SentenceTransformer
 import numpy as np
+from sentence_transformers import SentenceTransformer
 
-# Load model
-try:
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    print("✅ Model loaded successfully.")
-except Exception as e:
-    print(f"❌ Error loading model: {e}")
-    model = None
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
-
-# ======================================================
-# UTILS — safe embed string → vector
-# ======================================================
-def embed_text(text: str):
-    if not text or not text.strip():
-        return np.zeros(384, dtype=np.float32)
-
-    emb = model.encode(text.strip(), normalize_embeddings=True)
-    return np.array(emb, dtype=np.float32)
-
-
-# ======================================================
-#   EMBED CV — 5 FIELDS
-# ======================================================
-
-def embed_cv(cv: dict):
+def emb(text):
     """
-    Input schema: (from cvParser_final.py)
-    {
-        "summary": "",
-        "skills": [],
-        "experience_text": "",
-        "projects_text": "",
-        "full_text": ""
-    }
+    Generate embedding for text.
+    Returns None for empty/invalid text to avoid zero-vector noise.
     """
+    if not text or not str(text).strip():
+        return None
+    return model.encode(str(text).strip(), normalize_embeddings=True)
+
+
+# ============================================
+# CV EMBEDDER (new schema)
+# ============================================
+def embed_cv(cv):
+    print("\n========== CV EMBEDDING INPUT ==========")
 
     summary = cv.get("summary", "")
-    skills_list = cv.get("skills", [])
-    skills_text = ", ".join(skills_list)
-    exp_text = cv.get("experience_text", "")
-    proj_text = cv.get("projects_text", "")
+    experience = cv.get("experience", "")
+    job_title = cv.get("job_title", "")
+    skills = " ".join(cv.get("skills", [])) if cv.get("skills") else ""
+    location = cv.get("location", "")
     full = cv.get("full_text", "")
 
+    print("\n[CV SUMMARY]\n", summary[:200] if summary else "(empty)")
+    print("\n[CV EXPERIENCE]\n", experience[:200] if experience else "(empty)")
+    print("\n[CV JOB TITLE]\n", job_title)
+    print("\n[CV SKILLS]\n", skills[:200] if skills else "(empty)")
+    print("\n[CV LOCATION]\n", location)
+    print("\n[CV FULL TEXT]\n", full[:800] if full else "(empty)", "...\n")
+
     return {
-        "emb_summary": embed_text(summary),
-        "emb_skills": embed_text(skills_text),
-        "emb_experience": embed_text(exp_text),
-        "emb_projects": embed_text(proj_text),
-        "emb_full": embed_text(full)
+        "emb_summary": emb(summary),
+        "emb_experience": emb(experience),
+        "emb_job_title": emb(job_title),
+        "emb_skills": emb(skills),
+        "emb_location": emb(location),
+        "emb_full": emb(full),
     }
 
 
-# ======================================================
-#   EMBED JD — 5 FIELDS
-# ======================================================
+# ============================================
+# JD EMBEDDER (new schema)
+# ============================================
+def embed_jd(jd):
+    print("\n========== JD EMBEDDING INPUT ==========")
 
-def embed_jd(jd: dict):
-    """
-    Input schema: (from jdParser_final.py)
-    {
-        "job_description": "",
-        "required_skills": [],
-        "responsibilities": "",
-        "techstack": "",
-        "full_text": ""
-    }
-    """
-
-    desc = jd.get("job_description", "")
-    req_skills_list = jd.get("required_skills", [])
-    skills_text = ", ".join(req_skills_list)
-    responsibilities = jd.get("responsibilities", "")
-    tech_text = jd.get("techstack", "")
+    job_desc = jd.get("job_description", "")
+    job_requirement = jd.get("job_requirement", "")
+    job_title = jd.get("job_title", "")
+    skills = " ".join(jd.get("skills", [])) if jd.get("skills") else ""
+    location = jd.get("location", "")
     full = jd.get("full_text", "")
 
+    print("\n[JD DESCRIPTION]\n", job_desc[:200] if job_desc else "(empty)")
+    print("\n[JD REQUIREMENT]\n", job_requirement[:200] if job_requirement else "(empty)")
+    print("\n[JD JOB TITLE]\n", job_title)
+    print("\n[JD SKILLS]\n", skills[:200] if skills else "(empty)")
+    print("\n[JD LOCATION]\n", location)
+    print("\n[JD FULL TEXT]\n", full[:800] if full else "(empty)", "...\n")
+
     return {
-        "emb_description": embed_text(desc),
-        "emb_required_skills": embed_text(skills_text),
-        "emb_responsibilities": embed_text(responsibilities),
-        "emb_techstack": embed_text(tech_text),
-        "emb_full": embed_text(full)
+        "emb_job_description": emb(job_desc),
+        "emb_job_requirement": emb(job_requirement),
+        "emb_job_title": emb(job_title),
+        "emb_skills": emb(skills),
+        "emb_location": emb(location),
+        "emb_full": emb(full),
     }
-
-
-# ======================================================
-# AUTO-DETECT (CV or JD)
-# ======================================================
-
-def embed_auto(data: dict):
-    if "experience_text" in data or "projects_text" in data:
-        return embed_cv(data)
-    elif "responsibilities" in data or "techstack" in data:
-        return embed_jd(data)
-    else:
-        raise ValueError("❌ Cannot detect CV/JD format. Wrong schema.")
-
-
-# ======================================================
-# TEST
-# ======================================================
-if __name__ == "__main__":
-
-    sample_cv = {
-        "summary": "Backend dev with Python + FastAPI",
-        "skills": ["Python", "FastAPI", "MongoDB"],
-        "experience_text": "Built backend services and optimized database queries.",
-        "projects_text": "Developed job matching system using embeddings.",
-        "full_text": "This is full CV text."
-    }
-
-    sample_jd = {
-        "job_description": "We need a backend engineer to build FastAPI services.",
-        "required_skills": ["Python", "FastAPI", "MongoDB"],
-        "responsibilities": "Build APIs. Optimize DB queries.",
-        "techstack": "FastAPI, Python, MongoDB",
-        "full_text": "This is full JD text."
-    }
-
-    print("\n=== CV Embeddings ===")
-    cv_vecs = embed_cv(sample_cv)
-    for k, v in cv_vecs.items():
-        print(k, v.shape)
-
-    print("\n=== JD Embeddings ===")
-    jd_vecs = embed_jd(sample_jd)
-    for k, v in jd_vecs.items():
-        print(k, v.shape)

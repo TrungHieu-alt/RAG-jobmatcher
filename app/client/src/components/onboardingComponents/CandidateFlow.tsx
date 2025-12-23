@@ -11,6 +11,7 @@ interface CandidateFlowProps {
 }
 
 export function CandidateFlow({ step, data, onNext, onBack }: CandidateFlowProps) {
+  const [full_name, setfull_name] = useState(data.full_name || '');
   const [field, setField] = useState(data.field || '');
   const [desiredRole, setDesiredRole] = useState(data.desiredRole || '');
   const [location, setLocation] = useState(data.location || '');
@@ -52,8 +53,38 @@ export function CandidateFlow({ step, data, onNext, onBack }: CandidateFlowProps
     }
   };
 
-  // Step 0: Field/Industry
   if (step === 0) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center px-6 md:px-12">
+        <div className="w-full max-w-3xl mx-auto">
+          <div className="bg-white/25 backdrop-blur-2xl rounded-3xl p-12 md:p-16 shadow-[0_8px_32px_0_rgba(139,92,246,0.15)] border border-white/20">
+            <h1 className="mb-12 text-center text-gray-900">What's your name?</h1>
+            
+            <input
+              value={full_name}
+              onChange={(e) => setfull_name(e.target.value)}
+              placeholder="Acme Corp, TechStart, InnovateCo…"
+              className="w-full text-center text-xl px-5 py-3.5 mb-12 bg-white/40 border border-white/50 rounded-2xl placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+              autoFocus
+            />
+
+            <div className="flex justify-center">
+              <button
+                onClick={() => onNext({ full_name })}
+                disabled={!full_name.trim()}
+                className="min-w-48 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Step 1: Field/Industry
+  if (step === 1) {
     return (
       <div className="h-screen flex flex-col items-center justify-center px-6 md:px-12">
         <div className="w-full max-w-3xl mx-auto">
@@ -83,8 +114,8 @@ export function CandidateFlow({ step, data, onNext, onBack }: CandidateFlowProps
     );
   }
 
-  // Step 1: Desired Role
-  if (step === 1) {
+  // Step 2: Desired Role
+  if (step === 2) {
     return (
       <div className="h-screen flex flex-col items-center justify-center px-6 md:px-12">
         <div className="w-full max-w-3xl mx-auto">
@@ -114,8 +145,8 @@ export function CandidateFlow({ step, data, onNext, onBack }: CandidateFlowProps
     );
   }
 
-  // Step 2: Location
-  if (step === 2) {
+  // Step 3: Location
+  if (step === 3) {
     return (
       <div className="h-screen flex flex-col items-center justify-center px-6 md:px-12">
         <div className="w-full max-w-3xl mx-auto">
@@ -145,8 +176,8 @@ export function CandidateFlow({ step, data, onNext, onBack }: CandidateFlowProps
     );
   }
 
-  // Step 3: Experience
-  if (step === 3) {
+  // Step 4: Experience
+  if (step === 4) {
     return (
       <div className="h-screen flex flex-col items-center justify-center px-6 md:px-12">
         <div className="w-full max-w-3xl mx-auto">
@@ -184,8 +215,8 @@ export function CandidateFlow({ step, data, onNext, onBack }: CandidateFlowProps
     );
   }
 
-  // Step 4: Skills
-  if (step === 4) {
+  // Step 5: Skills
+  if (step === 5) {
     return (
       <div className="h-screen flex flex-col items-center justify-center px-6 md:px-12">
         <div className="w-full max-w-4xl mx-auto">
@@ -255,8 +286,8 @@ export function CandidateFlow({ step, data, onNext, onBack }: CandidateFlowProps
     );
   }
 
-  // Step 5: Bio
-  if (step === 5) {
+  // Step 6: Bio
+  if (step === 6) {
     return (
       <div className="h-screen flex flex-col items-center justify-center px-6 md:px-12">
         <div className="w-full max-w-4xl mx-auto">
@@ -286,12 +317,14 @@ export function CandidateFlow({ step, data, onNext, onBack }: CandidateFlowProps
     );
   }
 
-  // Step 6: Completion
-  if (step === 6) {
+  // Step 7: Completion
+  if (step === 7) {
 
     async function finish() {
       const userId = Number(localStorage.getItem("user_id"));
+      console.log("1");
       await createCandidateProfile(userId, {
+        full_name: data.full_name,
         location: data.location,
         experience: data.experience,
         skills: data.skills,

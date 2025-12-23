@@ -2,6 +2,7 @@ from typing import Optional
 from fastapi import HTTPException, status
 from repositories.candidate_repo import CandidateRepository
 from models.candidateProfile import CandidateProfile
+from typing import List
 
 
 class CandidateService:
@@ -35,3 +36,7 @@ class CandidateService:
                 detail="Candidate profile not found",
             )
         return profile
+
+    @staticmethod
+    async def get_all_profiles() -> List[CandidateProfile]:
+        return await CandidateRepository.get_all()

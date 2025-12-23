@@ -1,273 +1,471 @@
-import os, json, traceback
 import numpy as np
+import logging
+import json
+from typing import Dict, List, Optional
 
-from dataPreprocess.cvParser_final import parse_resume
-from dataPreprocess.jdParser_final import parse_jobpost
-from logics.embedder_final import embed_cv, embed_jd
-from logics.llmEvaluate import evaluate_match   # vẫn giữ để giải thích top N nếu muốn
-
-# =========================
-# 0️⃣ Very simple in-memory "DB"
-#    → mày thay bằng real DB / Chroma / LlamaIndex sau
-# =========================
-
-CV_STORE = {}   # cv_id -> {"data": cv_json, "emb": cv_embs}
-JD_STORE = {}   # jd_id -> {"data": jd_json, "emb": jd_embs}
+from ragmodel.db import vectorStore as vs
+from ragmodel.logics.embedder import embed_cv, embed_jd
+from ragmodel.logics.llmEvaluate import evaluate_match
 
 
-def upsert_cv(cv_id: str, cv_data: dict, cv_emb: dict):
-    CV_STORE[cv_id] = {"data": cv_data, "emb": cv_emb}
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# ============================
+# CONSTANTS
+# ============================
+class MatchingConfig:
+    """Configuration for matching system"""
+    # Retrieval stages
+    ANN_K = 50
+    RERANK_K = 10
+    FINAL_K = 5
+    
+    # Field weights (MVP: skills > experience > summary > job_title > full > location)
+    FIELD_WEIGHTS = {
+        "skills": 0.30,
+        "experience_requirement": 0.25,
+        "summary_description": 0.20,
+        "job_title": 0.15,
+        "full": 0.05,
+        "location": 0.05,
+    }
+    
+    # Hybrid scoring weights
+    HYBRID_WEIGHTS = {
+        "ann": 0.2,
+        "weighted": 0.5,
+        "llm": 0.3,
+    }
 
-def upsert_jd(jd_id: str, jd_data: dict, jd_emb: dict):
-    JD_STORE[jd_id] = {"data": jd_data, "emb": jd_emb}
+# Field mappings between CV and JD
+CV_JD_FIELD_MAP = {
+    "summary_description": ("emb_summary", "emb_job_description"),
+    "experience_requirement": ("emb_experience", "emb_job_requirement"),
+    "job_title": ("emb_job_title", "emb_job_title"),
+    "skills": ("emb_skills", "emb_skills"),
+    "location": ("emb_location", "emb_location"),
+    "full": ("emb_full", "emb_full"),
+}
 
-
-def get_all_cvs():
-    return CV_STORE.items()
-
-
-def get_all_jds():
-    return JD_STORE.items()
-
-
-# =========================
-# 🔢 Helper: cosine
-# =========================
-
-def cosine(a: np.ndarray, b: np.ndarray) -> float:
-    if a is None or b is None or a.shape != b.shape:
-        return 0.0
-    denom = (np.linalg.norm(a) * np.linalg.norm(b))
-    if denom == 0:
-        return 0.0
-    return float(np.dot(a, b) / denom)
-
-
-# =========================
-# 🎯 Multi-field score CV ↔ JD
-# =========================
-
-def score_cv_for_jd(cv_emb: dict, jd_emb: dict) -> float:
+# ============================
+# Helper: Deserialize embeddings
+# ============================
+def deserialize_embeddings(embeddings_json: str) -> Dict[str, Optional[np.ndarray]]:
     """
-    cv_emb keys:
-        emb_summary, emb_skills, emb_experience, emb_projects, emb_full
-    jd_emb keys:
-        emb_description, emb_required_skills, emb_responsibilities, emb_techstack, emb_full
+    Deserialize embeddings from JSON string to numpy arrays.
+    
+    Args:
+        embeddings_json: JSON string containing embeddings
+        
+    Returns:
+        Dictionary of numpy arrays (or None for missing embeddings)
     """
+    try:
+        embeddings_dict = json.loads(embeddings_json)
+        return {
+            k: np.array(v) if v is not None else None 
+            for k, v in embeddings_dict.items()
+        }
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.error(f"Failed to deserialize embeddings: {e}")
+        return {}
 
-    w_summary = 0.35
-    w_skills = 0.35
-    w_exp = 0.15
-    w_proj = 0.10
-    w_full = 0.05
+# ============================
+# Cosine similarity helper
+# ============================
+def cosine(a: Optional[np.ndarray], b: Optional[np.ndarray]) -> float:
+    """
+    Calculate cosine similarity between two vectors.
+    Returns 0.0 if either vector is None or invalid.
+    """
+    if a is None or b is None:
+        return 0.0
+    
+    # Ensure numpy arrays
+    a = np.array(a) if not isinstance(a, np.ndarray) else a
+    b = np.array(b) if not isinstance(b, np.ndarray) else b
+    
+    # Validate shapes
+    if len(a) == 0 or len(b) == 0 or a.shape != b.shape:
+        return 0.0
+    
+    # Already normalized in embedder.py, so dot product = cosine similarity
+    return float(np.dot(a, b))
 
-    s_summary = cosine(cv_emb["emb_summary"], jd_emb["emb_description"])
-    s_skills = cosine(cv_emb["emb_skills"], jd_emb["emb_required_skills"])
-    s_exp = cosine(cv_emb["emb_experience"], jd_emb["emb_responsibilities"])
-    s_proj = cosine(cv_emb["emb_projects"], jd_emb["emb_techstack"])
-    s_full = cosine(cv_emb["emb_full"], jd_emb["emb_full"])
-
-    total = (
-        w_summary * s_summary +
-        w_skills * s_skills +
-        w_exp * s_exp +
-        w_proj * s_proj +
-        w_full * s_full
+# ============================
+# Weighted Vector Similarity
+# ============================
+def calc_weighted_vector_sim(
+    cv_emb: Dict[str, np.ndarray], 
+    jd_emb: Dict[str, np.ndarray]
+) -> float:
+    """
+    Calculate weighted similarity between CV embeddings and JD embeddings.
+    Uses shared FIELD_WEIGHTS and field mappings.
+    
+    Args:
+        cv_emb: Dictionary of CV embeddings with keys like "emb_summary", "emb_skills", etc.
+        jd_emb: Dictionary of JD embeddings with keys like "emb_job_description", "emb_skills", etc.
+    
+    Returns:
+        Weighted similarity score [0.0, 1.0]
+    """
+    scores = {}
+    for key, (cv_field, jd_field) in CV_JD_FIELD_MAP.items():
+        scores[key] = cosine(cv_emb.get(cv_field), jd_emb.get(jd_field))
+    
+    weighted_sim = sum(
+        scores[key] * MatchingConfig.FIELD_WEIGHTS[key] 
+        for key in MatchingConfig.FIELD_WEIGHTS
     )
-    return total
+    
+    return weighted_sim
 
-
-def score_jd_for_cv(jd_emb: dict, cv_emb: dict) -> float:
-    # symmetric, nên dùng lại hàm trên cho nhất quán
-    return score_cv_for_jd(cv_emb, jd_emb)
-
-
-# =========================
-# 1️⃣ Index all CVs
-# =========================
-
-def index_all_cvs(cv_folder="cv_folder"):
-    print("\n=== 📥 INDEXING CVS (multi-field) ===")
-    count = 0
-    for file in os.listdir(cv_folder):
-        if not file.lower().endswith(".pdf"):
-            continue
-
-        path = os.path.join(cv_folder, file)
-        print(f"🧾 Parsing CV: {file}")
-        try:
-            cv_json = parse_resume(path)        # {"summary", "skills", "experience_text", "projects_text", "full_text"}
-            cv_embs = embed_cv(cv_json)         # {"emb_summary", "emb_skills", ...}
-
-            cv_id = file                        # hoặc hash/path/id gì mày muốn
-            upsert_cv(cv_id, cv_json, cv_embs)
-
-            count += 1
-        except Exception as e:
-            print(f"❌ Error processing CV {file}: {e}")
-            traceback.print_exc()
-
-    print(f"✅ Indexed {count} CVs with structured embeddings.")
-    return count
-
-
-# =========================
-# 2️⃣ Index all JDs
-# =========================
-
-def index_all_jds(jd_folder="jd_folder"):
-    print("\n=== 📥 INDEXING JDS (multi-field) ===")
-    count = 0
-    for file in os.listdir(jd_folder):
-        if not file.lower().endswith(".txt"):
-            continue
-
-        path = os.path.join(jd_folder, file)
-        print(f"🧾 Parsing JD: {file}")
-        try:
-            jd_text = open(path, "r", encoding="utf8").read()
-            jd_json = parse_jobpost(jd_text)    # {"job_description", "required_skills", ...}
-            jd_embs = embed_jd(jd_json)
-
-            jd_id = file
-            upsert_jd(jd_id, jd_json, jd_embs)
-
-            count += 1
-        except Exception as e:
-            print(f"❌ Error processing JD {file}: {e}")
-            traceback.print_exc()
-
-    print(f"✅ Indexed {count} JDs with structured embeddings.")
-    return count
-
-
-# =========================
-# 3️⃣ Find best candidates for a JD (text)
-# =========================
-
-def find_best_candidates(jd_text: str, top_k: int = 5, explain_top_n: int = 3):
-    print("\n=== 🧩 FIND BEST CANDIDATES (semantic) ===")
+# ============================
+# Helper: Normalize LLM score
+# ============================
+def normalize_llm_score(score: float) -> float:
+    """Clamp LLM score to [0, 100] range"""
     try:
-        # 1. Parse + embed JD
-        jd_json = parse_jobpost(jd_text)
-        jd_emb = embed_jd(jd_json)
+        return max(0.0, min(100.0, float(score)))
+    except (ValueError, TypeError):
+        return 0.0
 
-        # 2. Score tất cả CV (vì dataset nhỏ, brute-force cũng được)
-        scored = []
-        for cv_id, record in get_all_cvs():
-            cv_data = record["data"]
-            cv_emb = record["emb"]
-            score = score_cv_for_jd(cv_emb, jd_emb)
-            scored.append((cv_id, cv_data, score))
+# ============================
+# MATCH JD → CV (Direct matching)
+# ============================
+def match_jd_to_cv(jd_id: str, cv_id: str) -> Dict:
+    """
+    Calculate similarity between a specific JD and CV.
+    Returns scores for each field and final weighted score.
+    
+    Args:
+        jd_id: Job Description ID
+        cv_id: CV ID
+    
+    Returns:
+        Dictionary with cv_id, jd_id, field scores, and final_score
+    """
+    try:
+        # ---- GET CV DATA FROM SINGLE COLLECTION ----
+        cv_result = vs.cv_full.get(ids=[cv_id])
+        if not cv_result or not cv_result.get("metadatas"):
+            logger.error(f"CV {cv_id} not found")
+            return {
+                "cv_id": cv_id,
+                "jd_id": jd_id,
+                "scores": {},
+                "final_score": 0.0,
+            }
+        
+        # Deserialize embeddings from JSON string
+        cv_emb_json = cv_result["metadatas"][0].get("embeddings", "{}")
+        cv_vec = deserialize_embeddings(cv_emb_json)
+        
+        # ---- GET JD DATA FROM SINGLE COLLECTION ----
+        jd_result = vs.jd_full.get(ids=[jd_id])
+        if not jd_result or not jd_result.get("metadatas"):
+            logger.error(f"JD {jd_id} not found")
+            return {
+                "cv_id": cv_id,
+                "jd_id": jd_id,
+                "scores": {},
+                "final_score": 0.0,
+            }
+        
+        # Deserialize embeddings from JSON string
+        jd_emb_json = jd_result["metadatas"][0].get("embeddings", "{}")
+        jd_vec = deserialize_embeddings(jd_emb_json)
 
-        # 3. Sort theo score
-        scored.sort(key=lambda x: x[2], reverse=True)
-        top = scored[:top_k]
+        # Calculate field-wise scores using consistent mapping
+        scores = {}
+        for key, (cv_field, jd_field) in CV_JD_FIELD_MAP.items():
+            scores[key] = cosine(cv_vec.get(cv_field), jd_vec.get(jd_field))
+        
+        # Calculate final weighted score
+        final_score = sum(
+            scores[key] * MatchingConfig.FIELD_WEIGHTS[key] 
+            for key in MatchingConfig.FIELD_WEIGHTS
+        )
 
-        results = []
-
-        # 4. Optional: LLM evaluate + reason cho top N
-        for i, (cv_id, cv_data, score) in enumerate(top):
-            jd_for_llm = jd_json["full_text"]
-            cv_for_llm = cv_data["full_text"]
-
-            eval_result = {"score": None, "reason": None}
-            if i < explain_top_n:
-                eval_result = evaluate_match(jd_for_llm, cv_for_llm)
-
-            results.append({
-                "target": cv_id,
-                "semantic_score": round(score, 4),
-                "llm_score": eval_result.get("score"),
-                "reason": eval_result.get("reason")
-            })
-
-        print("\n🏆 TOP MATCHED CANDIDATES")
-        for i, r in enumerate(results):
-            print(f"\n#{i+1} {r['target']} | semantic={r['semantic_score']} | llm={r['llm_score']}")
-            if r["reason"]:
-                print(f"Reason: {r['reason'][:200]}...")
-
-        return results
-
+        return {
+            "cv_id": cv_id,
+            "jd_id": jd_id,
+            "scores": scores,
+            "final_score": final_score,
+        }
+        
     except Exception as e:
-        print(f"❌ Fatal error in find_best_candidates: {e}")
-        traceback.print_exc()
+        logger.error(f"Error fetching vectors for JD {jd_id} and CV {cv_id}: {e}")
+        return {
+            "cv_id": cv_id,
+            "jd_id": jd_id,
+            "scores": {},
+            "final_score": 0.0,
+        }
+
+# ============================
+# TOP-K CVs for JD (Retrieval + Rerank)
+# ============================
+def get_top_k_cvs_for_jd(
+    jd_json: Dict, 
+    ann_k: int = None, 
+    rerank_k: int = None, 
+    final_k: int = None
+) -> List[Dict]:
+    """
+    Find top-K CVs matching a Job Description using 3-stage pipeline:
+    1. ANN retrieval (broad search)
+    2. Weighted vector reranking (precise scoring)
+    3. LLM evaluation (reasoning + final ranking)
+    
+    Args:
+        jd_json: Job Description dictionary with fields like job_title, job_description, etc.
+        ann_k: Number of candidates from ANN stage (default: 50)
+        rerank_k: Number of candidates to send to LLM (default: 10)
+        final_k: Number of final results to return (default: 5)
+    
+    Returns:
+        List of top-K CV matches with scores and reasoning
+    """
+    import time
+    start_time = time.time()
+    
+    # Use config defaults if not specified
+    ann_k = ann_k or MatchingConfig.ANN_K
+    rerank_k = rerank_k or MatchingConfig.RERANK_K
+    final_k = final_k or MatchingConfig.FINAL_K
+    
+    # Get JD embeddings
+    jd_emb = embed_jd(jd_json)
+
+    try:
+        # ==== STAGE 1: ANN Retrieval ====
+        ann_results = vs.cv_full.query(
+            query_embeddings=[jd_emb["emb_full"]],
+            n_results=ann_k
+        )
+        
+        if not ann_results or not ann_results.get("ids"):
+            logger.warning("No results from ANN query")
+            return []
+        
+        candidate_ids = ann_results["ids"][0]
+        candidate_metas = ann_results["metadatas"][0]
+        
+        logger.info(f"Stage 1 (ANN): Retrieved {len(candidate_ids)} candidates")
+
+        # ==== STAGE 2: Weighted Vector Reranking ====
+        candidates = []
+        skipped = 0
+        
+        for cv_id, meta in zip(candidate_ids, candidate_metas):
+            # Deserialize embeddings from JSON string
+            cv_emb_json = meta.get("embeddings", "{}")
+            cv_emb = deserialize_embeddings(cv_emb_json)
+            
+            if not cv_emb:
+                skipped += 1
+                logger.debug(f"Skipping CV {cv_id}: no embeddings in metadata")
+                continue
+            
+            # Calculate weighted similarity
+            weighted_sim = calc_weighted_vector_sim(cv_emb, jd_emb)
+            cosine_ann = cosine(jd_emb["emb_full"], cv_emb.get("emb_full"))
+
+            candidates.append({
+                "id": cv_id,
+                "cv": meta,
+                "cosine_ann": cosine_ann,
+                "weighted_sim": weighted_sim
+            })
+        
+        if skipped > 0:
+            logger.warning(f"Skipped {skipped} candidates due to missing embeddings")
+
+        # Sort by weighted similarity and take top for LLM
+        candidates.sort(key=lambda x: x["weighted_sim"], reverse=True)
+        top_for_llm = candidates[:rerank_k]
+        
+        logger.info(f"Stage 2 (Weighted): Reranked to top {len(top_for_llm)} candidates")
+
+        # ==== STAGE 3: LLM Evaluation ====
+        for c in top_for_llm:
+            try:
+                # Call LLM with JD first, then CV
+                llm_result = evaluate_match(
+                    jd_json.get("full_text", ""), 
+                    c["cv"].get("full_text", "")
+                )
+                
+                # Normalize and store LLM score
+                c["llm_score"] = normalize_llm_score(llm_result.get("score", 0))
+                c["reason"] = llm_result.get("reason", "")
+                time.sleep(1)  # To avoid rate limits
+            except Exception as e:
+                logger.warning(f"LLM evaluation failed for CV {c['id']}: {e}")
+                # Fallback: use weighted similarity as proxy
+                c["llm_score"] = c["weighted_sim"] * 100
+                c["reason"] = "LLM evaluation unavailable (using vector similarity)"
+
+        logger.info(f"Stage 3 (LLM): Evaluated {len(top_for_llm)} candidates")
+
+        # ==== STAGE 4: Hybrid Ranking ====
+        def calculate_final_score(candidate: Dict) -> float:
+            """Calculate final hybrid score (all normalized to [0,1])"""
+            return (
+                MatchingConfig.HYBRID_WEIGHTS["ann"] * candidate["cosine_ann"] +
+                MatchingConfig.HYBRID_WEIGHTS["weighted"] * candidate["weighted_sim"] +
+                MatchingConfig.HYBRID_WEIGHTS["llm"] * (candidate.get("llm_score", 0) / 100)
+            )
+
+        # Sort by final hybrid score
+        top_for_llm.sort(key=calculate_final_score, reverse=True)
+        final_results = top_for_llm[:final_k]
+        
+        # Log completion
+        elapsed = time.time() - start_time
+        logger.info(
+            f"Matching completed in {elapsed:.2f}s: "
+            f"ANN({len(candidate_ids)}) → Weighted({len(top_for_llm)}) → Final({len(final_results)})"
+        )
+
+        return final_results
+        
+    except Exception as e:
+        logger.error(f"Error in get_top_k_cvs_for_jd: {e}", exc_info=True)
         return []
 
+# ============================
+# TOP-K JDs for CV (Retrieval + Rerank)
+# ============================
+def get_top_k_jds_for_cv(
+    cv_json: Dict, 
+    ann_k: int = None, 
+    rerank_k: int = None, 
+    final_k: int = None
+) -> List[Dict]:
+    """
+    Find top-K Job Descriptions matching a CV using 3-stage pipeline:
+    1. ANN retrieval (broad search)
+    2. Weighted vector reranking (precise scoring)
+    3. LLM evaluation (reasoning + final ranking)
+    
+    Args:
+        cv_json: CV dictionary with fields like job_title, summary, experience, etc.
+        ann_k: Number of candidates from ANN stage (default: 50)
+        rerank_k: Number of candidates to send to LLM (default: 10)
+        final_k: Number of final results to return (default: 5)
+    
+    Returns:
+        List of top-K JD matches with scores and reasoning
+    """
+    import time
+    start_time = time.time()
+    
+    # Use config defaults if not specified
+    ann_k = ann_k or MatchingConfig.ANN_K
+    rerank_k = rerank_k or MatchingConfig.RERANK_K
+    final_k = final_k or MatchingConfig.FINAL_K
+    
+    # Get CV embeddings
+    cv_emb = embed_cv(cv_json)
 
-# =========================
-# 4️⃣ Find best jobs for a CV (path)
-# =========================
-
-def find_best_jobs(cv_path: str, top_k: int = 5, explain_top_n: int = 3):
-    print("\n=== 🧩 FIND BEST JOBS (semantic) ===")
     try:
-        # 1. Parse + embed CV
-        cv_json = parse_resume(cv_path)
-        cv_emb = embed_cv(cv_json)
+        # ==== STAGE 1: ANN Retrieval ====
+        ann_results = vs.jd_full.query(
+            query_embeddings=[cv_emb["emb_full"]],
+            n_results=ann_k
+        )
+        
+        if not ann_results or not ann_results.get("ids"):
+            logger.warning("No results from ANN query")
+            return []
+        
+        candidate_ids = ann_results["ids"][0]
+        candidate_metas = ann_results["metadatas"][0]
+        
+        logger.info(f"Stage 1 (ANN): Retrieved {len(candidate_ids)} candidates")
 
-        # 2. Score tất cả JD
-        scored = []
-        for jd_id, record in get_all_jds():
-            jd_data = record["data"]
-            jd_emb = record["emb"]
-            score = score_jd_for_cv(jd_emb, cv_emb)
-            scored.append((jd_id, jd_data, score))
+        # ==== STAGE 2: Weighted Vector Reranking ====
+        candidates = []
+        skipped = 0
+        
+        for jd_id, meta in zip(candidate_ids, candidate_metas):
+            # Deserialize embeddings from JSON string
+            jd_emb_json = meta.get("embeddings", "{}")
+            jd_emb = deserialize_embeddings(jd_emb_json)
+            
+            if not jd_emb:
+                skipped += 1
+                logger.debug(f"Skipping JD {jd_id}: no embeddings in metadata")
+                continue
+            
+            # Calculate weighted similarity
+            weighted_sim = calc_weighted_vector_sim(cv_emb, jd_emb)
+            cosine_ann = cosine(cv_emb["emb_full"], jd_emb.get("emb_full"))
 
-        scored.sort(key=lambda x: x[2], reverse=True)
-        top = scored[:top_k]
-
-        results = []
-
-        # 3. Optional: LLM evaluate
-        for i, (jd_id, jd_data, score) in enumerate(top):
-            jd_for_llm = jd_data["full_text"]
-            cv_for_llm = cv_json["full_text"]
-
-            eval_result = {"score": None, "reason": None}
-            if i < explain_top_n:
-                eval_result = evaluate_match(jd_for_llm, cv_for_llm)
-
-            results.append({
-                "target": jd_id,
-                "semantic_score": round(score, 4),
-                "llm_score": eval_result.get("score"),
-                "reason": eval_result.get("reason")
+            candidates.append({
+                "id": jd_id,
+                "jd": meta,
+                "cosine_ann": cosine_ann,
+                "weighted_sim": weighted_sim
             })
+        
+        if skipped > 0:
+            logger.warning(f"Skipped {skipped} candidates due to missing embeddings")
 
-        print("\n🏆 TOP MATCHED JOBS")
-        for i, r in enumerate(results):
-            print(f"\n#{i+1} {r['target']} | semantic={r['semantic_score']} | llm={r['llm_score']}")
-            if r["reason"]:
-                print(f"Reason: {r['reason'][:200]}...")
+        # Sort by weighted similarity and take top for LLM
+        candidates.sort(key=lambda x: x["weighted_sim"], reverse=True)
+        top_for_llm = candidates[:rerank_k]
+        
+        logger.info(f"Stage 2 (Weighted): Reranked to top {len(top_for_llm)} candidates")
 
-        return results
+        # ==== STAGE 3: LLM Evaluation ====
+        for c in top_for_llm:
+            try:
+                # Call LLM with JD first, then CV
+                llm_result = evaluate_match(
+                    c["jd"].get("full_text", ""), 
+                    cv_json.get("full_text", "")
+                )
+                
+                # Normalize and store LLM score
+                c["llm_score"] = normalize_llm_score(llm_result.get("score", 0))
+                c["reason"] = llm_result.get("reason", "")
+                
+            except Exception as e:
+                logger.warning(f"LLM evaluation failed for JD {c['id']}: {e}")
+                # Fallback: use weighted similarity as proxy
+                c["llm_score"] = c["weighted_sim"] * 100
+                c["reason"] = "LLM evaluation unavailable (using vector similarity)"
 
+        logger.info(f"Stage 3 (LLM): Evaluated {len(top_for_llm)} candidates")
+
+        # ==== STAGE 4: Hybrid Ranking ====
+        def calculate_final_score(candidate: Dict) -> float:
+            """Calculate final hybrid score (all normalized to [0,1])"""
+            return (
+                MatchingConfig.HYBRID_WEIGHTS["ann"] * candidate["cosine_ann"] +
+                MatchingConfig.HYBRID_WEIGHTS["weighted"] * candidate["weighted_sim"] +
+                MatchingConfig.HYBRID_WEIGHTS["llm"] * (candidate.get("llm_score", 0) / 100)
+            )
+
+        # Sort by final hybrid score
+        top_for_llm.sort(key=calculate_final_score, reverse=True)
+        final_results = top_for_llm[:final_k]
+        
+        # Log completion
+        elapsed = time.time() - start_time
+        logger.info(
+            f"Matching completed in {elapsed:.2f}s: "
+            f"ANN({len(candidate_ids)}) → Weighted({len(top_for_llm)}) → Final({len(final_results)})"
+        )
+
+        return final_results
+        
     except Exception as e:
-        print(f"❌ Fatal error in find_best_jobs: {e}")
-        traceback.print_exc()
+        logger.error(f"Error in get_top_k_jds_for_cv: {e}", exc_info=True)
         return []
-
-
-# =========================
-# 5️⃣ Demo entry
-# =========================
-
-if __name__ == "__main__":
-    try:
-        # 1. Index trước
-        index_all_cvs("cv_folder")
-        index_all_jds("jd_folder")
-
-        # 2. Demo tìm candidate
-        jd_text = """
-        Hiring Backend Developer skilled in Python, FastAPI, and MongoDB.
-        0-2 years experience. Knowledge of Docker and cloud is a plus.
-        """
-        find_best_candidates(jd_text)
-
-    except Exception as e:
-        print(f"❌ Fatal error in __main__: {e}")
-        traceback.print_exc()

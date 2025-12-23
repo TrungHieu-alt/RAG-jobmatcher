@@ -5,11 +5,11 @@ from typing import List, Optional
 
 
 class CandidateResume(Document):
-    id: int
+    cv_id: int
     user_id: int
     title: str
     location: Optional[str]
-    experience_years: Optional[int]
+    experience: Optional[str]
     skills: List[str] = []
     summary: Optional[str]
     full_text: Optional[str]

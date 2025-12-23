@@ -17,6 +17,7 @@ type UserRole = 'candidate' | 'recruiter' | null;
 interface OnboardingData {
   role: UserRole;
   // Candidate data
+  full_name?: string;
   field?: string;
   desiredRole?: string;
   location?: string;
@@ -58,33 +59,37 @@ export default function OnBoardingPage() {
     // -----------------------------
     // LAST STEP → CREATE PROFILE
     // -----------------------------
-    const isCandidateLast = newData.role === "candidate" && currentStep === 7;
-    const isRecruiterLast = newData.role === "recruiter" && currentStep === 6;
+    // const isCandidateLast = newData.role === "candidate" && currentStep === 8;
+    // const isRecruiterLast = newData.role === "recruiter" && currentStep === 6;
 
-    if (userId && isCandidateLast) {
-      await createCandidateProfile(userId, {
-        location: newData.location ?? null,
-        experience: newData.experience ?? null,
-        skills: newData.skills ?? null,
-        bio: newData.bio ?? null,
-      });
-      console.log("Candidate profile created");
-      // TODO: redirect dashboard
-      return;
-    }
+    // if (userId && isCandidateLast) {
+    //   console.log("2");
 
-    if (userId && isRecruiterLast) {
-      await createRecruiterProfile(userId, {
-        companyName: newData.companyName ?? null,
-        title: newData.title ?? null,
-        companyLogo: newData.companyLogo ?? null,
-        companyDescription: newData.companyDescription ?? null,
-        hiringIndustry: newData.hiringIndustry ?? null,
-      });
-      console.log("Recruiter profile created");
-      // TODO: redirect dashboard
-      return;
-    }
+    //   await createCandidateProfile(userId, {
+    //     full_name: newData.full_name ?? null,
+    //     location: newData.location ?? null,
+    //     experience: newData.experience ?? null,
+    //     skills: newData.skills ?? null,
+    //     bio: newData.bio ?? null,
+    //   });
+    //   console.log("Candidate profile created");
+    //   // TODO: redirect dashboard
+    //   return;
+    // }
+
+    // if (userId && isRecruiterLast) {
+    //   console.log("2");
+    //   await createRecruiterProfile(userId, {
+    //     companyName: newData.companyName ?? null,
+    //     title: newData.title ?? null,
+    //     companyLogo: newData.companyLogo ?? null,
+    //     companyDescription: newData.companyDescription ?? null,
+    //     hiringIndustry: newData.hiringIndustry ?? null,
+    //   });
+    //   console.log("Recruiter profile created");
+    //   // TODO: redirect dashboard
+    //   return;
+    // }
 
     // -----------------------------
     // NORMAL NEXT STEP
@@ -100,7 +105,7 @@ export default function OnBoardingPage() {
   };
 
   const getTotalSteps = () => {
-    if (data.role === 'candidate') return 8;   // step 0 + 7 candidate screens
+    if (data.role === 'candidate') return 9;   // step 0 + 7 candidate screens
     if (data.role === 'recruiter') return 7;   // step 0 + 6 recruiter screens
     return 1;
   };

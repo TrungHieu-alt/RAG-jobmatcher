@@ -1,147 +1,83 @@
-# llmEvaluate_final.py
-from google import generativeai as gemini
-from config import GEMINI_API_KEY
-import json, re, traceback
+import google.generativeai as genai
+import json
+import re
+import logging
+from ragmodel.config import GEMINI_API_KEY, MODEL
 
-def _log(msg: str):
-    print(msg.replace("```", "'''"))
+# Configure Gemini
+genai.configure(api_key=GEMINI_API_KEY)
 
+# Set up logging
+logger = logging.getLogger(__name__)
 
-# ============================
-# Gemini Setup
-# ============================
-try:
-    gemini.configure(api_key=GEMINI_API_KEY)
-    _log("✅ Gemini API configured successfully.")
-except Exception as e:
-    _log(f"❌ Failed to configure Gemini API: {e}")
-
-
-# ============================
-# JSON CLEAN HELPERS
-# ============================
-def _clean_code_fence(t: str) -> str:
-    t = t.strip()
-    t = re.sub(r"```json", "", t, flags=re.I)
-    t = re.sub(r"```", "", t)
-    return t.strip()
-
-
-def _extract_json(t: str) -> str:
-    """Take { ... } block only."""
-    start = t.find("{")
-    end = t.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return t[start:end+1]
-    return t.strip()
-
-
-def _sanitize_json(t: str) -> str:
-    t = re.sub(r'\([^)]*\)', '', t)
-    t = re.sub(r'//.*', '', t)
-    t = re.sub(r'#.*', '', t)
-    t = t.replace("\n", " ")
-    return t.strip()
-
-
-def _validate(obj: dict) -> dict:
-    if not isinstance(obj, dict):
-        return {
-            "score": 0,
-            "matched_skills": [],
-            "missing_skills": [],
-            "reason": str(obj)[:200]
-        }
-
-    out = {
-        "score": 0,
-        "matched_skills": [],
-        "missing_skills": [],
-        "reason": ""
-    }
-
-    # score
-    try:
-        val = obj.get("score", 0)
-        if isinstance(val, (int, float)):
-            out["score"] = int(val)
-        else:
-            val = str(val).replace("%", "")
-            out["score"] = int(float(val)) if val.replace(".", "").isdigit() else 0
-    except:
-        out["score"] = 0
-
-    # skills
-    out["matched_skills"] = [s.strip() for s in obj.get("matched_skills", []) if isinstance(s, str)]
-    out["missing_skills"] = [s.strip() for s in obj.get("missing_skills", []) if isinstance(s, str)]
-
-    # reason
-    out["reason"] = str(obj.get("reason", ""))[:400]
-
-    return out
-
-
-# ============================
-# MAIN
-# ============================
-def evaluate_match(jd_fulltext: str, cv_fulltext: str):
+def evaluate_match(jd_text: str, cv_text: str) -> dict:
     """
-    jd_fulltext = JD["full_text"]
-    cv_fulltext = CV["full_text"]
+    Evaluate how well a CV matches a Job Description using LLM.
+    
+    Args:
+        jd_text: Full text of the Job Description
+        cv_text: Full text of the CV
+    
+    Returns:
+        Dictionary with:
+        - score (int): Match score from 0-100
+        - reason (str): Explanation of the match
+    
+    Raises:
+        ValueError: If LLM returns invalid JSON
+        Exception: If API call fails
     """
-
-    _log("\n=== 🤖 EVALUATING MATCH ===")
-
-    if not jd_fulltext.strip() or not cv_fulltext.strip():
-        return {"score": 0, "matched_skills": [], "missing_skills": [], "reason": "Empty input."}
-
     prompt = f"""
-You are a senior recruiter. Evaluate how well this CV matches this Job Description.
+Evaluate how well the CV matches the Job Description.
 
-STRICT RULES:
-- DO NOT invent skills. Only extract skills that explicitly appear in the text.
-- matched_skills MUST be a subset of the actual skills found in BOTH texts.
-- missing_skills MUST be a subset of REQUIREMENTS found in JD but NOT in CV.
-- reason MUST be 1–2 sentences, concise, no hallucination.
-- score MUST be an integer 0–100.
-- Return ONLY valid JSON, no code fences.
+Return JSON ONLY (no markdown, no code blocks):
 
-Job Description (JD):
-{jd_fulltext}
-
-Curriculum Vitae (CV):
-{cv_fulltext}
-
-Return JSON:
 {{
-  "score": 0-100,
-  "matched_skills": [],
-  "missing_skills": [],
+  "score": 0,
   "reason": ""
 }}
+
+Score rule:
+- 0–100, where higher = better match
+- Consider: skills match, experience level, job title relevance, location compatibility
+- Be specific in your reasoning
+
+TEXT_JD:
+{jd_text}
+
+TEXT_CV:
+{cv_text}
 """
 
     try:
-        model = gemini.GenerativeModel("gemini-2.5-flash")
-        resp = model.generate_content(prompt)
+        # Call Gemini API
+        response = genai.GenerativeModel(MODEL).generate_content(prompt)
+        output = response.text.strip()
 
-        raw = (resp.text or "").strip()
-        _log("Raw LLM output:")
-        _log(raw[:600])
+        # Remove markdown code blocks if present
+        output = re.sub(r"```json\s*|```\s*", "", output).strip()
 
-        cleaned = _clean_code_fence(raw)
-        cleaned = _extract_json(cleaned)
-        cleaned = _sanitize_json(cleaned)
-
-        try:
-            parsed = json.loads(cleaned)
-            return _validate(parsed)
-        except:
-            _log("❌ JSON Failed:")
-            _log(cleaned)
-            return {"score": 0, "matched_skills": [], "missing_skills": [], "reason": cleaned[:200]}
-
+        # Parse JSON
+        result = json.loads(output)
+        
+        # Validate structure
+        if "score" not in result or "reason" not in result:
+            raise ValueError("Missing required fields: score or reason")
+        
+        # Validate score is a number
+        score = float(result["score"])
+        if not (0 <= score <= 100):
+            logger.warning(f"LLM returned score outside [0,100]: {score}")
+        
+        return {
+            "score": score,
+            "reason": str(result["reason"])
+        }
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON from LLM: {output[:200]}")
+        raise ValueError(f"LLM returned invalid JSON: {e}")
+    
     except Exception as e:
-        _log(f"❌ Fatal LLM error: {e}")
-        traceback.print_exc()
-        return {"score": 0, "matched_skills": [], "missing_skills": [], "reason": str(e)[:200]}
+        logger.error(f"LLM evaluation failed: {e}")
+        raise

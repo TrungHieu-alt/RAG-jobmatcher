@@ -9,7 +9,6 @@ interface SignUpProps {
 }
 
 export function SignUp({ onNavigate, onOpenPolicy }: SignUpProps) {
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -25,11 +24,6 @@ export function SignUp({ onNavigate, onOpenPolicy }: SignUpProps) {
     setError(null);
 
     // VALIDATION
-    if (!fullName.trim()) {
-      setError("Full name is required");
-      return;
-    }
-
     if (!email.trim()) {
       setError("Email is required");
       return;
@@ -62,7 +56,6 @@ export function SignUp({ onNavigate, onOpenPolicy }: SignUpProps) {
     try {
       const user = await registerEmptyUser(email, password);
       localStorage.setItem("user_id", user.user_id);
-      localStorage.setItem("full_name", fullName);
       setCreated(true);
       navigate("/onboarding");
     } catch (err: any) {
@@ -99,17 +92,6 @@ export function SignUp({ onNavigate, onOpenPolicy }: SignUpProps) {
           <p className="text-center text-gray-700 mb-5">
             Enter your details to get started. It's quick and secure.
           </p>
-
-          <div className="mb-3">
-            <input
-              type="text"
-              placeholder="Full Name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl px-5 py-3.5 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-white/60 transition-all"
-            />
-          </div>
-
           <div className="mb-3">
             <input
               type="email"

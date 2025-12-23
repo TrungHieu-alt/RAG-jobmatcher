@@ -5,7 +5,7 @@ from typing import List, Optional
 
 
 class JobPost(Document):
-    id: int
+    job_id: int
     recruiter_id: int
     title: str
     role: str

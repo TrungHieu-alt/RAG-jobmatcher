@@ -1,17 +1,16 @@
+// CandidatePage.tsx
 import { useState, useEffect } from 'react';
-import Sidebar from './candidateComponents/Sidebar';
 import Topbar from './candidateComponents/Topbar';
 import Dashboard from './candidateComponents/Dashboard';
-import JobMatching from './candidateComponents/JobMatching';
-import CreateCV from './candidateComponents/CreateCV';
-// import MyCVs from './candidateComponents/MyCVs';
-import SavedJobs from './candidateComponents/SavedJobs';
+import MyCVs from './candidateComponents/MyCVs';
 import AppliedJobs from './candidateComponents/AppliedJobs';
+import CreateCV from './candidateComponents/CreateCV';
 import Settings from './candidateComponents/Settings';
 
 export default function CandidatePage() {
   const [activePage, setActivePage] = useState('dashboard');
   const [isDark, setIsDark] = useState(false);
+  const [previousPage, setPreviousPage] = useState('my-cvs');
 
   useEffect(() => {
     const darkModePreference = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -30,20 +29,31 @@ export default function CandidatePage() {
     setIsDark(!isDark);
   };
 
+  const handleNavigateToCreateCV = () => {
+    setPreviousPage('my-cvs');
+    setActivePage('create-cv');
+  };
+
+  const handleBackFromCreateCV = () => {
+    setActivePage(previousPage);
+  };
+
+  const handleNavigate = (page: string) => {
+    if (page !== 'create-cv') {
+      setActivePage(page);
+    }
+  };
+
   const renderPage = () => {
     switch (activePage) {
       case 'dashboard':
         return <Dashboard />;
-      case 'job-matching':
-        return <JobMatching />;
-      case 'create-cv':
-        return <CreateCV />;
-      // case 'my-cvs':
-      //   return <MyCVs />;
-      case 'saved-jobs':
-        return <SavedJobs />;
+      case 'my-cvs':
+        return <MyCVs onNavigateToCreateCV={handleNavigateToCreateCV} />;
       case 'applied-jobs':
         return <AppliedJobs />;
+      case 'create-cv':
+        return <CreateCV onNavigateBack={handleBackFromCreateCV} />;
       case 'settings':
         return <Settings />;
       default:
@@ -53,10 +63,14 @@ export default function CandidatePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar activePage={activePage} onNavigate={setActivePage} />
-      <Topbar isDark={isDark} onToggleTheme={toggleTheme} />
+      <Topbar 
+        activePage={activePage}
+        onNavigate={handleNavigate}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+      />
       
-      <main className="ml-64 pt-16 p-6">
+      <main className="pt-5 p-6">
         <div className="max-w-7xl mx-auto">
           {renderPage()}
         </div>

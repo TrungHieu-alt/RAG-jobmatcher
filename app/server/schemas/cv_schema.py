@@ -6,7 +6,7 @@ from typing import List, Optional
 class CandidateResumeRequest(BaseModel):
     title: str
     location: Optional[str] = None
-    experience_years: int = 0
+    experience: Optional[str] = None
     skills: List[str] = []
     summary: Optional[str] = None
     full_text: Optional[str] = None
@@ -19,7 +19,7 @@ class CandidateResumeResponse(BaseModel):
     user_id: int
     title: str
     location: Optional[str]
-    experience_years: int
+    experience: Optional[str]
     skills: List[str]
     summary: Optional[str]
     full_text: Optional[str]

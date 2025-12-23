@@ -1,161 +1,362 @@
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Briefcase, Users, MessageSquare, CheckCircle } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Badge } from '../ui/badge';
+import { useState, useMemo, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Briefcase, Search, MapPin, DollarSign, Clock, X, User } from 'lucide-react';
+import { listCandidates, ListCandidate } from '../../api/users';
 
-const performanceData = [
-  { month: 'Jan', matches: 45, offers: 12 },
-  { month: 'Feb', matches: 52, offers: 15 },
-  { month: 'Mar', matches: 68, offers: 20 },
-  { month: 'Apr', matches: 75, offers: 22 },
-  { month: 'May', matches: 89, offers: 28 },
-  { month: 'Jun', matches: 95, offers: 32 },
-];
+interface Candidate {
+  id: number;
+  name: string;
+  skills: string[];
+  location: string;
+  salary: string;
+  posted: string;
+  experience: string;
+  workfield: string;
+}
 
-const recentJobs = [
-  { title: 'Senior React Developer', posted: '2024-10-28', status: 'Active', matchScore: 94 },
-  { title: 'Product Designer', posted: '2024-10-27', status: 'Active', matchScore: 88 },
-  { title: 'DevOps Engineer', posted: '2024-10-25', status: 'Active', matchScore: 91 },
-  { title: 'UX Researcher', posted: '2024-10-24', status: 'Closed', matchScore: 85 },
-  { title: 'Backend Engineer', posted: '2024-10-22', status: 'Active', matchScore: 92 },
-];
+interface Filters {
+  location: string[];
+  experience: string[];
+  workfield: string[];
+}
 
-export function Dashboard() {
+const locationOptions: string[] = ['Ho Chi Minh', 'Hanoi', 'Da Nang'];
+const experienceOptions: string[] = ['1+ years', '2+ years', '3+ years', '4+ years', '5+ years'];
+const workfieldOptions: string[] = ['tech', 'healthcare', 'finance', 'education', 'marketing'];
+
+export function Dashboard(){
+  const [candidates, setCandidates] = useState<ListCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filters, setFilters] = useState<Filters>({
+    location: [],
+    experience: [],
+    workfield: [],
+  });
+  const [sortBy, setSortBy] = useState<'recent' | 'match'>('recent');
+
+  useEffect(() => {
+    async function loadCandidates() {
+      try {
+        const data = await listCandidates();
+        setCandidates(data);
+      } catch (err) {
+        console.error('Error loading candidates:', err);
+        setError('Failed to load candidates');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadCandidates();
+  }, []);
+
+  const filteredCandidates = useMemo<Candidate[]>(() => {
+    let result = candidates.map((c: ListCandidate): Candidate => ({
+      id: c.user_id,
+      name: c.full_name || 'Unknown',
+      skills: c.skills || [],
+      location: c.location || '',
+      salary: '', // Not available from API
+      posted: '', // Not available from API
+      experience: c.experience_years ? `${c.experience_years}+ years` : '',
+      workfield: '', // Not available from API
+    })).filter((candidate: Candidate): boolean => {
+      const matchesSearch: boolean = candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           candidate.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const matchesLocation: boolean = filters.location.length === 0 || 
+                             filters.location.includes(candidate.location);
+      
+      const matchesExperience: boolean = filters.experience.length === 0 || 
+                             filters.experience.includes(candidate.experience);
+
+      const matchesWorkfield: boolean = filters.workfield.length === 0 || 
+                             filters.workfield.includes(candidate.workfield);
+
+      return matchesSearch && matchesLocation && matchesExperience && matchesWorkfield;
+    });
+
+    if (sortBy === 'recent') {
+      result.sort((a: Candidate, b: Candidate): number => new Date(b.posted).getTime() - new Date(a.posted).getTime());
+    } else if (sortBy === 'match') {
+      result.sort((a: Candidate, b: Candidate): number => new Date(b.posted).getTime() - new Date(a.posted).getTime());
+    }
+
+    return result;
+  }, [candidates, searchQuery, filters, sortBy]);
+
+  const toggleFilter = (type: 'location' | 'experience' | 'workfield', value: string): void => {
+    setFilters((prev: Filters): Filters => ({
+      ...prev,
+      [type]: prev[type].includes(value)
+        ? prev[type].filter((v: string): boolean => v !== value)
+        : [...prev[type], value]
+    }));
+  };
+
+  const clearFilters = (): void => {
+    setFilters({ location: [], experience: [], workfield: [] });
+    setSearchQuery('');
+  };
+
+  const hasActiveFilters: boolean = filters.location.length > 0 || filters.experience.length > 0 || filters.workfield.length > 0 || searchQuery !== '';
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-1">
+            <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card sticky top-6">
+              <CardContent className="space-y-6 mt-4">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-slate-200 rounded mb-4"></div>
+                  <div className="space-y-2">
+                    <div className="h-3 bg-slate-200 rounded"></div>
+                    <div className="h-3 bg-slate-200 rounded"></div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="lg:col-span-3">
+            <div className="animate-pulse">
+              <div className="h-6 bg-slate-200 rounded mb-4"></div>
+              <div className="space-y-3">
+                <div className="h-32 bg-slate-200 rounded"></div>
+                <div className="h-32 bg-slate-200 rounded"></div>
+                <div className="h-32 bg-slate-200 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3 lg:col-start-2">
+            <Card className="rounded-2xl border-border shadow-sm">
+              <CardContent className="p-12 text-center">
+                <User className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-600 dark:text-slate-400">{error}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Jobs Posted</CardTitle>
-            <Briefcase className="w-5 h-5 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl">24</div>
-            <p className="text-xs text-muted-foreground mt-1">+3 this week</p>
-          </CardContent>
-        </Card>
 
-        <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Candidates Matched</CardTitle>
-            <Users className="w-5 h-5 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl">156</div>
-            <p className="text-xs text-muted-foreground mt-1">+12 this week</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Filters Sidebar */}
+        <div className="lg:col-span-1">
+          <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card sticky top-6 ">
+            <CardContent className="space-y-6 mt-4">
+              {/* Search Input */}
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
+                  Search Candidates
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Candidate name or skills..."
+                    value={searchQuery}
+                    onChange={(e): void => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
 
-        <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-pink-50 to-white dark:from-pink-950/20 dark:to-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Messages Sent</CardTitle>
-            <MessageSquare className="w-5 h-5 text-pink-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl">89</div>
-            <p className="text-xs text-muted-foreground mt-1">+8 this week</p>
-          </CardContent>
-        </Card>
+              {/* Location Filter */}
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Location
+                </label>
+                <div className="space-y-2">
+                  {locationOptions.map((location: string) => (
+                    <label key={location} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.location.includes(location)}
+                        onChange={(): void => toggleFilter('location', location)}
+                        className="w-4 h-4 rounded border-slate-300 text-purple-600 dark:text-purple-500"
+                      />
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{location}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-        <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-green-50 to-white dark:from-green-950/20 dark:to-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Offers Accepted</CardTitle>
-            <CheckCircle className="w-5 h-5 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl">32</div>
-            <p className="text-xs text-muted-foreground mt-1">+5 this week</p>
-          </CardContent>
-        </Card>
-      </div>
+              {/* Experience Filter */}
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Experience
+                </label>
+                <div className="space-y-2">
+                  {experienceOptions.map((exp: string) => (
+                    <label key={exp} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.experience.includes(exp)}
+                        onChange={(): void => toggleFilter('experience', exp)}
+                        className="w-4 h-4 rounded border-slate-300 text-purple-600 dark:text-purple-500"
+                      />
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{exp}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-      {/* Performance Chart */}
-      <Card className="rounded-2xl border-border shadow-sm">
-        <CardHeader>
-          <CardTitle>Matching Performance Over Time</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={performanceData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(99, 100, 255, 0.1)" />
-              <XAxis dataKey="month" stroke="#6b6b7b" />
-              <YAxis stroke="#6b6b7b" />
-              <Tooltip 
-                contentStyle={{ 
-                  background: 'var(--card)', 
-                  border: '1px solid var(--border)',
-                  borderRadius: '12px'
-                }} 
-              />
-              <Line 
-                type="monotone" 
-                dataKey="matches" 
-                stroke="#6364FF" 
-                strokeWidth={3}
-                dot={{ fill: '#6364FF', r: 5 }}
-                name="Matches"
-              />
-              <Line 
-                type="monotone" 
-                dataKey="offers" 
-                stroke="#9b87f5" 
-                strokeWidth={3}
-                dot={{ fill: '#9b87f5', r: 5 }}
-                name="Offers"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+              {/* Workfield Filter */}
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block flex items-center gap-2">
+                  <Briefcase className="w-4 h-4" />
+                  Workfield
+                </label>
+                <div className="space-y-2">
+                  {workfieldOptions.map((field: string) => (
+                    <label key={field} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.workfield.includes(field)}
+                        onChange={(): void => toggleFilter('workfield', field)}
+                        className="w-4 h-4 rounded border-slate-300 text-purple-600 dark:text-purple-500"
+                      />
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{field}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-      {/* Recent Job Posts */}
-      <Card className="rounded-2xl border-border shadow-sm">
-        <CardHeader>
-          <CardTitle>Recent Job Posts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 text-muted-foreground">Title</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground">Posted Date</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground">Status</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground">Top Match Score</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentJobs.map((job, idx) => (
-                  <tr key={idx} className="border-b border-border hover:bg-accent/50 transition-colors">
-                    <td className="py-3 px-4">{job.title}</td>
-                    <td className="py-3 px-4 text-muted-foreground">{job.posted}</td>
-                    <td className="py-3 px-4">
-                      <Badge 
-                        variant={job.status === 'Active' ? 'default' : 'secondary'}
-                        className={job.status === 'Active' ? 'bg-linear-to-r from-purple-500 to-purple-600' : ''}
-                      >
-                        {job.status}
+              {/* Active Filters Tags */}
+              {hasActiveFilters && (
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Active Filters</p>
+                  <div className="flex flex-wrap gap-2">
+                    {searchQuery && (
+                      <Badge variant="outline" className="gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                        {searchQuery}
+                        <X className="w-3 h-3 cursor-pointer" onClick={(): void => setSearchQuery('')} />
                       </Badge>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-accent rounded-full h-2 max-w-[100px]">
-                          <div 
-                            className="bg-linear-to-r from-purple-500 to-purple-600 h-2 rounded-full" 
-                            style={{ width: `${job.matchScore}%` }}
-                          />
-                        </div>
-                        <span className="text-sm">{job.matchScore}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    )}
+                    {filters.location.map((loc: string) => (
+                      <Badge key={loc} variant="outline" className="gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                        {loc}
+                        <X className="w-3 h-3 cursor-pointer" onClick={(): void => toggleFilter('location', loc)} />
+                      </Badge>
+                    ))}
+                    {filters.experience.map((exp: string) => (
+                      <Badge key={exp} variant="outline" className="gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                        {exp}
+                        <X className="w-3 h-3 cursor-pointer" onClick={(): void => toggleFilter('experience', exp)} />
+                      </Badge>
+                    ))}
+                    {filters.workfield.map((field: string) => (
+                      <Badge key={field} variant="outline" className="gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                        {field}
+                        <X className="w-3 h-3 cursor-pointer" onClick={(): void => toggleFilter('workfield', field)} />
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Job Results */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Results Header */}
+          <div className="flex items-center justify-between">
+            <p className="text-slate-600 dark:text-slate-400">
+              Found <span className="font-bold text-slate-900 dark:text-white">{filteredCandidates.length}</span> candidates
+            </p>
+            <select
+              value={sortBy}
+              onChange={(e): void => setSortBy(e.target.value as 'recent' | 'match')}
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="recent">Most Recent</option>
+              <option value="match">Best Match</option>
+            </select>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Candidate Cards */}
+          {filteredCandidates.length > 0 ? (
+            <div className="space-y-3">
+              {filteredCandidates.map((candidate: Candidate) => (
+                <Card key={candidate.id} className="rounded-2xl border-border shadow-sm bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">{candidate.name}</h3>
+                        <div className="flex flex-wrap gap-1">
+                          {candidate.skills.slice(0, 3).map((skill: string) => (
+                            <Badge key={skill} variant="secondary" className="text-xs">
+                              {skill}
+                            </Badge>
+                          ))}
+                          {candidate.skills.length > 3 && (
+                            <Badge variant="secondary" className="text-xs">
+                              +{candidate.skills.length - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300">{candidate.location}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300">{candidate.experience}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300">{candidate.salary}$</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300">{candidate.workfield}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                      <button className="ml-4 cursor-pointer px-6 py-2 bg-linear-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200">
+                        View Resume
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card">
+              <CardContent className="p-12 text-center">
+                <User className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-600 dark:text-slate-400 mb-2">No candidates found</p>
+                <p className="text-sm text-slate-500 dark:text-slate-500">Try adjusting your filters or search query</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

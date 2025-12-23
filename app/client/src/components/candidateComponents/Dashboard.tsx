@@ -1,194 +1,353 @@
-import { FileText, Briefcase, Send, Star, TrendingUp } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useState, useMemo, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Briefcase, Search, MapPin, DollarSign, Clock, X } from 'lucide-react';
+import { listJobs, type JobPostResponse } from '@/api/jobs';
+import { getRecruiterProfile, type RecruiterProfileResponse } from '@/api/users';
 
-export default function Dashboard() {
-  const stats = [
-    { label: 'Total CVs Created', value: '12', icon: FileText, color: 'from-purple-400 to-purple-600' },
-    { label: 'Jobs Matched', value: '47', icon: Briefcase, color: 'from-violet-400 to-violet-600' },
-    { label: 'Applications Sent', value: '23', icon: Send, color: 'from-indigo-400 to-indigo-600' },
-    { label: 'Saved Jobs', value: '15', icon: Star, color: 'from-purple-500 to-purple-700' },
-  ];
+interface Job {
+  id: number;
+  title: string;
+  company: string;
+  location: string;
+  salary: string;
+  posted: string;
+  type: string;
+  experience: string;
+}
 
-  const matchScoreData = [
-    { month: 'Jan', score: 65 },
-    { month: 'Feb', score: 72 },
-    { month: 'Mar', score: 68 },
-    { month: 'Apr', score: 78 },
-    { month: 'May', score: 85 },
-    { month: 'Jun', score: 88 },
-  ];
+interface Filters {
+  location: string[];
+  jobType: string[];
+}
 
-  const recommendedJobs = [
-    {
-      id: 1,
-      title: 'Senior Frontend Developer',
-      company: 'TechCorp Inc.',
-      matchScore: 92,
-      skills: 'React, TypeScript, Tailwind',
-      status: 'New',
-    },
-    {
-      id: 2,
-      title: 'Full Stack Engineer',
-      company: 'StartupXYZ',
-      matchScore: 88,
-      skills: 'Node.js, React, PostgreSQL',
-      status: 'New',
-    },
-    {
-      id: 3,
-      title: 'UI/UX Developer',
-      company: 'DesignHub',
-      matchScore: 85,
-      skills: 'Figma, React, CSS',
-      status: 'Viewed',
-    },
-    {
-      id: 4,
-      title: 'React Developer',
-      company: 'WebSolutions',
-      matchScore: 82,
-      skills: 'React, Redux, Jest',
-      status: 'New',
-    },
-    {
-      id: 5,
-      title: 'Frontend Architect',
-      company: 'Enterprise Corp',
-      matchScore: 80,
-      skills: 'JavaScript, Architecture, Leadership',
-      status: 'Viewed',
-    },
-  ];
+const locationOptions: string[] = ['Ho Chi Minh', 'Hanoi', 'Da Nang'];
+const jobTypeOptions: string[] = ['Full-time', 'Part-time', 'Remote'];
+
+export default function Dashboard(){
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filters, setFilters] = useState<Filters>({
+    location: [],
+    jobType: [],
+  });
+  const [sortBy, setSortBy] = useState<'recent' | 'match'>('recent');
+
+  useEffect(() => {
+    async function loadJobs() {
+      try {
+        const jobResponses: JobPostResponse[] = await listJobs();
+        
+        const jobsData: Job[] = await Promise.all(
+          jobResponses.map(async (jobRes: JobPostResponse) => {
+            try {
+              const recruiterProfile: RecruiterProfileResponse = await getRecruiterProfile(jobRes.recruiter_id);
+              
+              const salary = jobRes.salary_min && jobRes.salary_max 
+                ? `${jobRes.salary_min}-${jobRes.salary_max}`
+                : jobRes.salary_min 
+                  ? `${jobRes.salary_min}+`
+                  : jobRes.salary_max 
+                    ? `Up to ${jobRes.salary_max}`
+                    : 'Not specified';
+              
+              return {
+                id: jobRes.job_id,
+                title: jobRes.title,
+                company: recruiterProfile.company_name || 'Unknown Company',
+                location: jobRes.location,
+                salary,
+                posted: new Date(jobRes.created_at).toISOString().split('T')[0], // YYYY-MM-DD format
+                type: jobRes.job_type,
+                experience: jobRes.experience_level,
+              };
+            } catch (err) {
+              console.error('Error fetching recruiter profile:', err);
+              return {
+                id: jobRes.job_id,
+                title: jobRes.title,
+                company: 'Unknown Company',
+                location: jobRes.location,
+                salary: jobRes.salary_min && jobRes.salary_max 
+                  ? `${jobRes.salary_min}-${jobRes.salary_max}`
+                  : 'Not specified',
+                posted: new Date(jobRes.created_at).toISOString().split('T')[0],
+                type: jobRes.job_type,
+                experience: jobRes.experience_level,
+              };
+            }
+          })
+        );
+        
+        setJobs(jobsData);
+      } catch (err) {
+        console.error('Error loading jobs:', err);
+        setError('Failed to load jobs');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadJobs();
+  }, []);
+
+  const filteredJobs = useMemo<Job[]>(() => {
+    let result = jobs.filter((job: Job): boolean => {
+      const matchesSearch: boolean = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           job.company.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesLocation: boolean = filters.location.length === 0 || 
+                             filters.location.includes(job.location);
+      
+      const matchesType: boolean = filters.jobType.length === 0 || 
+                         filters.jobType.includes(job.type);
+
+      return matchesSearch && matchesLocation && matchesType;
+    });
+
+    if (sortBy === 'recent') {
+      result.sort((a: Job, b: Job): number => new Date(b.posted).getTime() - new Date(a.posted).getTime());
+    } else if (sortBy === 'match') {
+      result.sort((a: Job, b: Job): number => new Date(b.posted).getTime() - new Date(a.posted).getTime());
+    }
+
+    return result;
+  }, [jobs, searchQuery, filters, sortBy]);
+
+  const toggleFilter = (type: 'location' | 'jobType', value: string): void => {
+    setFilters((prev: Filters): Filters => ({
+      ...prev,
+      [type]: prev[type].includes(value)
+        ? prev[type].filter((v: string): boolean => v !== value)
+        : [...prev[type], value]
+    }));
+  };
+
+  const clearFilters = (): void => {
+    setFilters({ location: [], jobType: [] });
+    setSearchQuery('');
+  };
+
+  const hasActiveFilters: boolean = filters.location.length > 0 || filters.jobType.length > 0 || searchQuery !== '';
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-1">
+            <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card sticky top-6">
+              <CardContent className="space-y-6 mt-4">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-slate-200 rounded mb-2"></div>
+                  <div className="h-10 bg-slate-200 rounded"></div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="lg:col-span-3">
+            <div className="animate-pulse">
+              <div className="h-6 bg-slate-200 rounded mb-4"></div>
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <Card key={i} className="rounded-2xl border-border shadow-sm">
+                    <CardContent className="p-6">
+                      <div className="h-4 bg-slate-200 rounded mb-2"></div>
+                      <div className="h-3 bg-slate-200 rounded w-3/4"></div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3 lg:col-start-2">
+            <Card className="rounded-2xl border-border shadow-sm">
+              <CardContent className="p-12 text-center">
+                <Briefcase className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-600 dark:text-slate-400 mb-2">{error}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-500">Please try again later</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2>Welcome Back!</h2>
-        <p className="text-muted-foreground">Here's what's happening with your job search today</p>
-      </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={index}
-              className="bg-card rounded-2xl p-6 border border-border shadow-sm hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`w-12 h-12 rounded-xl bg-linear-to-br ${stat.color} flex items-center justify-center shadow-lg`}>
-                  <Icon className="w-6 h-6 text-white" />
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Filters Sidebar */}
+        <div className="lg:col-span-1">
+          <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card sticky top-6 ">
+            <CardContent className="space-y-6 mt-4">
+              {/* Search Input */}
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
+                  Search Jobs
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Job title or company..."
+                    value={searchQuery}
+                    onChange={(e): void => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
                 </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-muted-foreground text-sm">{stat.label}</p>
-                <h3 className="text-3xl">{stat.value}</h3>
+
+              {/* Location Filter */}
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Location
+                </label>
+                <div className="space-y-2">
+                  {locationOptions.map((location: string) => (
+                    <label key={location} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.location.includes(location)}
+                        onChange={(): void => toggleFilter('location', location)}
+                        className="w-4 h-4 rounded border-slate-300 text-purple-600 dark:text-purple-500"
+                      />
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{location}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
 
-      {/* Chart Section */}
-      <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3>Average Match Score Over Time</h3>
-            <p className="text-muted-foreground text-sm">Your matching performance trend</p>
-          </div>
-          <div className="flex items-center gap-2 text-green-600">
-            <TrendingUp className="w-5 h-5" />
-            <span>+12% this month</span>
-          </div>
+              {/* Job Type Filter */}
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block flex items-center gap-2">
+                  <Briefcase className="w-4 h-4" />
+                  Job Type
+                </label>
+                <div className="space-y-2">
+                  {jobTypeOptions.map((type: string) => (
+                    <label key={type} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.jobType.includes(type)}
+                        onChange={(): void => toggleFilter('jobType', type)}
+                        className="w-4 h-4 rounded border-slate-300 text-purple-600 dark:text-purple-500"
+                      />
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{type}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Active Filters Tags */}
+              {hasActiveFilters && (
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Active Filters</p>
+                  <div className="flex flex-wrap gap-2">
+                    {searchQuery && (
+                      <Badge variant="outline" className="gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                        {searchQuery}
+                        <X className="w-3 h-3 cursor-pointer" onClick={(): void => setSearchQuery('')} />
+                      </Badge>
+                    )}
+                    {filters.location.map((loc: string) => (
+                      <Badge key={loc} variant="outline" className="gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                        {loc}
+                        <X className="w-3 h-3 cursor-pointer" onClick={(): void => toggleFilter('location', loc)} />
+                      </Badge>
+                    ))}
+                    {filters.jobType.map((type: string) => (
+                      <Badge key={type} variant="outline" className="gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                        {type}
+                        <X className="w-3 h-3 cursor-pointer" onClick={(): void => toggleFilter('jobType', type)} />
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={matchScoreData}>
-            <defs>
-              <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#a78bfa" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e8e5f5" />
-            <XAxis dataKey="month" stroke="#8b86a3" />
-            <YAxis stroke="#8b86a3" />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'white',
-                border: '1px solid #e8e5f5',
-                borderRadius: '12px',
-                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-              }}
-            />
-            <Line
-              type="monotone"
-              dataKey="score"
-              stroke="#6c5dd3"
-              strokeWidth={3}
-              fill="url(#colorScore)"
-              dot={{ fill: '#6c5dd3', r: 6 }}
-              activeDot={{ r: 8 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+        {/* Job Results */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Results Header */}
+          <div className="flex items-center justify-between">
+            <p className="text-slate-600 dark:text-slate-400">
+              Found <span className="font-bold text-slate-900 dark:text-white">{filteredJobs.length}</span> jobs
+            </p>
+            <select
+              value={sortBy}
+              onChange={(e): void => setSortBy(e.target.value as 'recent' | 'match')}
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="recent">Most Recent</option>
+              <option value="match">Best Match</option>
+            </select>
+          </div>
 
-      {/* Recommended Jobs Table */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-border">
-          <h3>Recommended Jobs</h3>
-          <p className="text-muted-foreground text-sm">Top matches based on your profile</p>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left px-6 py-4 text-sm text-muted-foreground">Job Title</th>
-                <th className="text-left px-6 py-4 text-sm text-muted-foreground">Company</th>
-                <th className="text-left px-6 py-4 text-sm text-muted-foreground">Match Score</th>
-                <th className="text-left px-6 py-4 text-sm text-muted-foreground">Skills Matched</th>
-                <th className="text-left px-6 py-4 text-sm text-muted-foreground">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recommendedJobs.map((job) => (
-                <tr
-                  key={job.id}
-                  className="border-t border-border hover:bg-muted/30 cursor-pointer transition-colors"
-                >
-                  <td className="px-6 py-4">{job.title}</td>
-                  <td className="px-6 py-4 text-muted-foreground">{job.company}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 max-w-[100px] h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-linear-to-r from-purple-500 to-purple-600 rounded-full"
-                          style={{ width: `${job.matchScore}%` }}
-                        ></div>
+          {/* Job Cards */}
+          {filteredJobs.length > 0 ? (
+            <div className="space-y-3">
+              {filteredJobs.map((job: Job) => (
+                <Card key={job.id} className="rounded-2xl border-border shadow-sm bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">{job.title}</h3>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">{job.company}</p>
                       </div>
-                      <span className="text-sm">{job.matchScore}%</span>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-muted-foreground text-sm">{job.skills}</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs ${
-                        job.status === 'New'
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {job.status}
-                    </span>
-                  </td>
-                </tr>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300">{job.location}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300">{job.type}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300">{job.salary}$</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300">{job.experience}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                      <button className="ml-4 cursor-pointer px-6 py-2 bg-linear-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200">
+                        View
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            <Card className="rounded-2xl border-border shadow-sm bg-linear-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card">
+              <CardContent className="p-12 text-center">
+                <Briefcase className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-600 dark:text-slate-400 mb-2">No jobs found</p>
+                <p className="text-sm text-slate-500 dark:text-slate-500">Try adjusting your filters or search query</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

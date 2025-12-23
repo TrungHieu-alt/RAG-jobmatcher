@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Briefcase, Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { loginUser } from '../../api/auth';
 
 interface SignInProps {
@@ -8,12 +9,12 @@ interface SignInProps {
 }
 
 export function SignIn({ onNavigate }: SignInProps) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
 
   const handleSignIn = async (e?: React.MouseEvent) => {
     e?.preventDefault();
@@ -33,7 +34,7 @@ export function SignIn({ onNavigate }: SignInProps) {
       setError("Password is required");
       return;
     }
-    if (password.length < 6) {
+    if (password.trim().length < 6) {
       setError("Password must be at least 6 characters");
       return;
     }
@@ -41,9 +42,14 @@ export function SignIn({ onNavigate }: SignInProps) {
     setLoading(true);
     try {
       const res = await loginUser({ email, password });
-      setToken(res.access_token ?? null);
+      
+      // Decode JWT to get user_id
+      const decoded = JSON.parse(atob(res.access_token.split('.')[1]));
+      localStorage.setItem("user_id", String(decoded.user_id || decoded.sub));
+      
+      navigate('/dashboard');
     } catch (err: any) {
-      setError(err?.message ?? 'Sign in failed');
+      setError(err?.message || err?.details?.detail || 'Sign in failed');
     } finally {
       setLoading(false);
     }
@@ -83,7 +89,8 @@ export function SignIn({ onNavigate }: SignInProps) {
               placeholder="Email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl px-5 py-3.5 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-white/60 transition-all"
+              disabled={loading}
+              className="w-full bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl px-5 py-3.5 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-white/60 transition-all disabled:opacity-50"
             />
           </div>
 
@@ -93,33 +100,39 @@ export function SignIn({ onNavigate }: SignInProps) {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl px-5 py-3.5 pr-12 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-white/60 transition-all"
+              disabled={loading}
+              className="w-full bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl px-5 py-3.5 pr-12 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-white/60 transition-all disabled:opacity-50"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 transition-colors"
+              disabled={loading}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50"
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
 
+          {error && (
+            <div className="mb-3 p-3 bg-red-100/50 border border-red-300 rounded-lg">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleSignIn}
             disabled={loading}
-            className="w-full bg-linear-to-r from-purple-600 to-purple-500 text-white py-3.5 rounded-2xl mb-3 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full bg-linear-to-r from-purple-600 to-purple-500 text-white py-3.5 rounded-2xl mb-3 shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed font-medium"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
 
-          {error && <div className="text-sm text-red-600 mb-2">{error}</div>}
-          {token && <div className="text-sm text-green-700 mb-2">Signed in</div>}
-
           <div className="flex flex-col items-center gap-2.5 mb-3">
             <button
               onClick={() => onNavigate('forgot')}
-              className="text-purple-900 hover:text-purple-950 transition-colors underline decoration-1 underline-offset-4"
+              disabled={loading}
+              className="text-purple-900 hover:text-purple-950 transition-colors underline decoration-1 underline-offset-4 disabled:opacity-50"
             >
               Forgot password?
             </button>
@@ -127,7 +140,8 @@ export function SignIn({ onNavigate }: SignInProps) {
               Don't have an account?{' '}
               <button
                 onClick={() => onNavigate('signup')}
-                className="text-purple-900 hover:text-purple-950 transition-colors underline decoration-1 underline-offset-4"
+                disabled={loading}
+                className="text-purple-900 hover:text-purple-950 transition-colors underline decoration-1 underline-offset-4 disabled:opacity-50"
               >
                 Create one
               </button>

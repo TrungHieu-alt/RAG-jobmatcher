@@ -1,6 +1,7 @@
 from fastapi import APIRouter, status
 from schemas.candidate_schema import CandidateProfileRequest, CandidateProfileResponse
 from services.candidate_service import CandidateService
+from typing import List
 
 router = APIRouter(prefix="/candidate", tags=["candidate"])
 
@@ -29,3 +30,8 @@ async def update_profile(user_id: int, req: CandidateProfileRequest):
         summary=req.summary,
     )
     return profile
+
+
+@router.get("/profiles", response_model=List[CandidateProfileResponse])
+async def get_all_candidate_profiles():
+    return await CandidateService.get_all_profiles()

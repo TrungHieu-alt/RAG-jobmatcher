@@ -1,5 +1,5 @@
+// RecruiterPage.tsx
 import { useState, useEffect } from 'react';
-import { Sidebar } from './recruiterComponents/Sidebar';
 import { Topbar } from './recruiterComponents/Topbar';
 import { Dashboard } from './recruiterComponents/Dashboard';
 import { JobPosts } from './recruiterComponents/JobPosts';
@@ -11,6 +11,12 @@ import { Settings } from './recruiterComponents/Settings';
 export default function RecruiterPage() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [previousPage, setPreviousPage] = useState('jobs');
+
+  useEffect(() => {
+    const darkModePreference = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setIsDarkMode(darkModePreference);
+  }, []);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -20,6 +26,21 @@ export default function RecruiterPage() {
     }
   }, [isDarkMode]);
 
+  const handleNavigateToCreateJob = () => {
+    setPreviousPage('matching');
+    setCurrentPage('create-job');
+  };
+
+  const handleBackFromCreateJob = () => {
+    setCurrentPage(previousPage);
+  };
+
+  const handleNavigate = (page: string) => {
+    if (page !== 'create-job') {
+      setCurrentPage(page);
+    }
+  };
+
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
@@ -27,33 +48,34 @@ export default function RecruiterPage() {
       case 'jobs':
         return <JobPosts />;
       case 'matching':
-        return <MatchingTracker />;
+        return <MatchingTracker onNavigateToCreateJob={handleNavigateToCreateJob} />;
       case 'candidates':
         return <CandidateManager />;
       case 'analytics':
         return <Analytics />;
       case 'settings':
         return <Settings />;
+      case 'create-job':
+        return <JobPosts onNavigateBack={handleBackFromCreateJob} />;
       default:
         return <Dashboard />;
     }
   };
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+    <div className="min-h-screen bg-background">
+      <Topbar 
+        currentPage={currentPage}
+        onNavigate={handleNavigate}
+        isDarkMode={isDarkMode}
+        onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+      />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar */}
-        <Topbar isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)} />
-
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-8">
+      <main className="p-8">
+        <div className="max-w-7xl mx-auto">
           {renderPage()}
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

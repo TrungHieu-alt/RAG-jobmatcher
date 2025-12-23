@@ -1,12 +1,74 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
-import { Label } from '../ui/label';
-import { Input } from '../ui/input';
-import { Button } from '../ui/button';
-import { Switch } from '../ui/switch';
-import { Separator } from '../ui/separator';
-import { Bell, Lock, User, Globe } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
+import { Label } from "../ui/label";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Switch } from "../ui/switch";
+import { Separator } from "../ui/separator";
+import { Bell, Lock, User, Globe } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import {
+  getUser,
+  getRecruiterProfile,
+  updateRecruiterProfile,
+  type RecruiterProfileResponse,
+} from "@/api/users";
 
 export function Settings() {
+  const userId = Number(localStorage.getItem("user_id"));
+
+  const [loaded, setLoaded] = useState(false);
+
+  // Recruiter profile state
+  const [companyName, setCompanyName] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [title, setTitle] = useState("");
+  const [aboutCompany, setAboutCompany] = useState("");
+  const [hiringFields, setHiringFields] = useState<string[]>([]);
+
+  // ======================================================
+  // LOAD RECRUITER PROFILE
+  // ======================================================
+  useEffect(() => {
+    async function load() {
+      const user = await getUser(userId);
+      if (user.role !== "recruiter") {
+        console.error("Not recruiter");
+        return;
+      }
+
+      const profile: RecruiterProfileResponse = await getRecruiterProfile(userId);
+      setCompanyName(profile.company_name ?? "");
+      setTitle(profile.recruiter_title ?? "");
+      setAboutCompany(profile.about_company ?? "");
+      setHiringFields(profile.hiring_fields ?? []);
+
+      // Map the first hiring field to UI input
+      setIndustry(profile.hiring_fields?.[0] ?? "");
+
+      setLoaded(true);
+    }
+
+    load();
+  }, [userId]);
+
+  // ======================================================
+  // SAVE PROFILE
+  // ======================================================
+  async function handleSave() {
+    await updateRecruiterProfile(userId, {
+      companyName,
+      title,
+      companyDescription: aboutCompany,
+      hiringIndustry: industry ? [industry] : [],
+    });
+
+    alert("Profile updated!");
+  }
+
+  if (!loaded)
+    return <div className="p-6 text-muted-foreground">Loading recruiter profile...</div>;
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
@@ -27,28 +89,58 @@ export function Settings() {
             </div>
           </div>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
             <div className="space-y-2">
               <Label>Company Name</Label>
-              <Input defaultValue="TechCorp Inc." className="bg-input-background border-border rounded-xl" />
+              <Input
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="bg-input-background border-border rounded-xl"
+              />
             </div>
+
             <div className="space-y-2">
               <Label>Industry</Label>
-              <Input defaultValue="Technology" className="bg-input-background border-border rounded-xl" />
+              <Input
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                className="bg-input-background border-border rounded-xl"
+              />
             </div>
+
           </div>
+
           <div className="space-y-2">
-            <Label>Company Website</Label>
-            <Input defaultValue="https://techcorp.com" className="bg-input-background border-border rounded-xl" />
+            <Label>Recruiter Title</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="bg-input-background border-border rounded-xl"
+            />
           </div>
-          <Button className="bg-linear-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 rounded-xl">
+
+          <div className="space-y-2">
+            <Label>About Company</Label>
+            <textarea
+              value={aboutCompany}
+              onChange={(e) => setAboutCompany(e.target.value)}
+              className="w-full min-h-28 px-4 py-3 bg-input-background rounded-xl border-border"
+            />
+          </div>
+
+          <Button
+            onClick={handleSave}
+            className="bg-linear-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 rounded-xl"
+          >
             Save Changes
           </Button>
         </CardContent>
       </Card>
 
-      {/* Notifications */}
+      {/* Notifications (nguyên bản UI của mày) */}
       <Card className="rounded-2xl border-border shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -61,6 +153,7 @@ export function Settings() {
             </div>
           </div>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -70,6 +163,7 @@ export function Settings() {
             <Switch defaultChecked />
           </div>
           <Separator />
+
           <div className="flex items-center justify-between">
             <div>
               <div>Message Replies</div>
@@ -78,6 +172,7 @@ export function Settings() {
             <Switch defaultChecked />
           </div>
           <Separator />
+
           <div className="flex items-center justify-between">
             <div>
               <div>Weekly Reports</div>
@@ -85,34 +180,6 @@ export function Settings() {
             </div>
             <Switch />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Mastodon Integration */}
-      <Card className="rounded-2xl border-border shadow-sm">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-purple-400 to-purple-600 flex items-center justify-center">
-              <Globe className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <CardTitle>Mastodon Integration</CardTitle>
-              <CardDescription>Connect your Mastodon instance</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Mastodon Instance URL</Label>
-            <Input placeholder="https://mastodon.social" className="bg-input-background border-border rounded-xl" />
-          </div>
-          <div className="space-y-2">
-            <Label>API Token</Label>
-            <Input type="password" placeholder="Enter your API token" className="bg-input-background border-border rounded-xl" />
-          </div>
-          <Button variant="outline" className="rounded-xl border-border">
-            Connect to Mastodon
-          </Button>
         </CardContent>
       </Card>
 
@@ -133,7 +200,9 @@ export function Settings() {
           <Button variant="outline" className="rounded-xl border-border">
             Change Password
           </Button>
+
           <Separator />
+
           <div className="flex items-center justify-between">
             <div>
               <div>Two-Factor Authentication</div>

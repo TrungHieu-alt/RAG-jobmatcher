@@ -1,48 +1,91 @@
 import { Eye, MessageSquare } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { getApplicationsByCandidate, type ApplicationWithDetails } from '@/api/predict';
+import { getJob, type JobPostResponse } from '@/api/jobs';
+import { getRecruiterProfile, type RecruiterProfileResponse } from '@/api/users';
+
+interface AppliedJob {
+  id: number;
+  title: string;
+  company: string;
+  appliedDate: string;
+  status: string;
+  logo: string;
+}
 
 export default function AppliedJobs() {
-  const appliedJobs = [
-    {
-      id: 1,
-      title: 'Senior Frontend Developer',
-      company: 'TechCorp Inc.',
-      appliedDate: 'Jan 15, 2025',
-      status: 'Interview',
-      logo: '🏢',
-    },
-    {
-      id: 2,
-      title: 'Full Stack Engineer',
-      company: 'StartupXYZ',
-      appliedDate: 'Jan 12, 2025',
-      status: 'Under Review',
-      logo: '🚀',
-    },
-    {
-      id: 3,
-      title: 'UI/UX Developer',
-      company: 'DesignHub',
-      appliedDate: 'Jan 10, 2025',
-      status: 'Offer',
-      logo: '🎨',
-    },
-    {
-      id: 4,
-      title: 'React Developer',
-      company: 'WebSolutions',
-      appliedDate: 'Jan 8, 2025',
-      status: 'Rejected',
-      logo: '💻',
-    },
-    {
-      id: 5,
-      title: 'Frontend Architect',
-      company: 'Enterprise Corp',
-      appliedDate: 'Jan 5, 2025',
-      status: 'Under Review',
-      logo: '🏛️',
-    },
-  ];
+  const [appliedJobs, setAppliedJobs] = useState<AppliedJob[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadAppliedJobs() {
+      try {
+        const candidateId = Number(localStorage.getItem("user_id"));
+        if (!candidateId) {
+          setError("User not logged in");
+          setLoading(false);
+          return;
+        }
+
+        const applicationsResponse = await getApplicationsByCandidate(candidateId);
+        const applications = applicationsResponse.applications;
+
+        const jobsData: AppliedJob[] = await Promise.all(
+          applications.map(async (app: ApplicationWithDetails) => {
+            try {
+              const job: JobPostResponse = await getJob(app.job_id);
+              const recruiterProfile: RecruiterProfileResponse = await getRecruiterProfile(job.recruiter_id);
+
+              const statusMap: Record<string, string> = {
+                pending: 'Under Review',
+                viewed: 'Under Review',
+                interviewing: 'Interview',
+                rejected: 'Rejected',
+                hired: 'Offer',
+              };
+
+              return {
+                id: app.app_id,
+                title: job.title,
+                company: recruiterProfile.company_name || 'Unknown Company',
+                appliedDate: new Date(app.created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                }),
+                status: statusMap[app.status] || app.status,
+                logo: recruiterProfile.company_logo || '🏢',
+              };
+            } catch (err) {
+              console.error('Error fetching job or recruiter data:', err);
+              return {
+                id: app.app_id,
+                title: 'Unknown Job',
+                company: 'Unknown Company',
+                appliedDate: new Date(app.created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                }),
+                status: app.status,
+                logo: '🏢',
+              };
+            }
+          })
+        );
+
+        setAppliedJobs(jobsData);
+      } catch (err) {
+        console.error('Error loading applied jobs:', err);
+        setError('Failed to load applied jobs');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadAppliedJobs();
+  }, []);
 
   const getStatusStyle = (status: string) => {
     switch (status) {
@@ -58,6 +101,28 @@ export default function AppliedJobs() {
         return 'bg-gradient-to-r from-gray-500 to-gray-600 text-white';
     }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2>Applied Jobs</h2>
+          <p className="text-muted-foreground">Loading your applications...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2>Applied Jobs</h2>
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

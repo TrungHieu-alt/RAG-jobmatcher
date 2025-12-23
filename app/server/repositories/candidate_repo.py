@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from models.candidateProfile import CandidateProfile
 
 
@@ -22,6 +22,11 @@ class CandidateRepository:
         return await CandidateProfile.find_one(CandidateProfile.user_id == user_id)
 
     @staticmethod
+    async def get_by_id(user_id: int) -> Optional[CandidateProfile]:
+        """Alias for get_by_user_id for compatibility"""
+        return await CandidateProfile.find_one(CandidateProfile.user_id == user_id)
+
+    @staticmethod
     async def update(user_id: int, **kwargs) -> Optional[CandidateProfile]:
         profile = await CandidateProfile.find_one(CandidateProfile.user_id == user_id)
         if profile:
@@ -36,3 +41,7 @@ class CandidateRepository:
             await profile.delete()
             return True
         return False
+
+    @staticmethod
+    async def get_all() -> List[CandidateProfile]:
+        return await CandidateProfile.find().to_list()
