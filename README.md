@@ -1,4 +1,4 @@
-﻿# Mastodon Job Matcher Extension
+﻿﻿# Mastodon Job Matcher Extension
 
 Dự án gồm backend + frontend để quản lý hồ sơ ứng viên, bài đăng tuyển dụng và thực hiện matching hai chiều. Hệ thống hỗ trợ đăng nhập, quản lý CV/JD, theo dõi ứng tuyển, và trả về kết quả matching có giải thích. README này mô tả toàn bộ sản phẩm, không chỉ riêng RAG.
 
@@ -23,39 +23,7 @@ Dự án gồm backend + frontend để quản lý hồ sơ ứng viên, bài đ
 - **Frontend**: React + Vite + Tailwind + Radix UI.
 
 ## High-Level System Diagram
-```
-            +----------------------+
-            |      Frontend UI     |
-            |  (React/Vite/TW)     |
-            +----------+-----------+
-                       |
-                       | HTTPS/REST
-                       v
-            +----------------------+
-            |   Backend API        |
-            |   (FastAPI)          |
-            +----+-----------+-----+
-                 |           |
-                 |           |
-                 v           v
-       +----------------+  +-------------------+
-       | MongoDB        |  | AI Services       |
-       | Users/CVs/JDs  |  | Gemini Parsing &  |
-       | Match Results  |  | Evaluation        |
-       +----------------+  +---------+---------+
-                                      |
-                                      v
-                              +---------------+
-                              | Embeddings    |
-                              | MiniLM        |
-                              +-------+-------+
-                                      |
-                                      v
-                              +---------------+
-                              | ChromaDB      |
-                              | Vector Store  |
-                              +---------------+
-```
+![Overview](asset/overview.png)
 
 ## RAG Matching Diagram (chi tiết)
 ```
@@ -140,45 +108,27 @@ Frontend UI  --->  Backend API  --->  MongoDB (CRUD)
 
 ## Cấu trúc UI (tóm tắt)
 - **AuthPage**: Đăng nhập/đăng ký/quên mật khẩu.
+  ![Auth Page](asset/authPage.png)
 - **OnBoardingPage**: Chọn vai trò (Candidate/Recruiter).
 - **CandidatePage**:
-  - Dashboard
-  - My CVs (upload/quản lý)
-  - Job Matching (gợi ý công việc)
-  - Applied Jobs (đơn đã ứng tuyển)
-  - Settings
+![Candidate Page](asset/candidate.png)
 - **RecruiterPage**:
-  - Dashboard
-  - Job Posts (tạo/quản lý bài đăng)
-  - Candidate Manager + Detail modal
-  - Matching Tracker
-  - Analytics
-  - Settings
+![Recruiter Page](asset/Recruiter.png)
 
-## Các bảng/collection DB (tóm tắt)
-- **users**: thông tin tài khoản, vai trò, email, password hash.
-- **candidate_profiles**: thông tin ứng viên (hồ sơ).
-- **recruiter_profiles**: thông tin nhà tuyển dụng.
-- **candidate_resumes**: CV (title, location, experience, skills, summary, full_text, pdf_url, user_id, is_main).
-- **job_posts**: bài đăng (title, role, location, job_type, experience_level, skills, salary_min/max, full_text, recruiter_id).
-- **match_results**: kết quả matching (cv_id, job_id, score, metadata, timestamps).
-- **applications**: đơn ứng tuyển (cv_id, job_id, status, timestamps).
+## Cấu trúc database
+![Data Schemas](asset/dataschemas.png)
+
+- **User**: thông tin tài khoản và vai trò
+- **CV**: title, location, experience, skills, summary, full_text, pdf_url
+- **JD**: title, role, location, job_type, experience_level, skills, salary
+- **MatchResult**: cv_id, job_id, score, metadata, timestamps
+
 
 ## API chính
 - `POST /api/matching/job/{job_id}/run`
 - `POST /api/matching/cv/{cv_id}/run`
 - `GET  /api/matching/job/{job_id}/matches`
 - `GET  /api/matching/cv/{cv_id}/matches`
-
-## Dữ liệu lưu trữ
-### MongoDB
-- **User**: thông tin tài khoản và vai trò
-- **CV**: title, location, experience, skills, summary, full_text, pdf_url
-- **JD**: title, role, location, job_type, experience_level, skills, salary
-- **MatchResult**: cv_id, job_id, score, metadata, timestamps
-
-### ChromaDB
-- Lưu embeddings cho truy hồi nhanh (full_text và field-level).
 
 ## Công nghệ chính
 - Backend: FastAPI, Uvicorn, MongoDB (Beanie/Motor)
@@ -189,7 +139,7 @@ Frontend UI  --->  Backend API  --->  MongoDB (CRUD)
 ## Cấu trúc thư mục
 ```
 app/
-  server/       # FastAPI + RAG pipeline
+  server/       # Crud + RAG pipeline
   client/       # React UI
 ```
 
