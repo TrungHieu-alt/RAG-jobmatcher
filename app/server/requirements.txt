@@ -23,16 +23,21 @@ chromadb==1.2.1
 pymupdf==1.22.5
 pytesseract==0.3.13
 pillow==10.4.0
+docx2txt==0.8
+langdetect==1.0.9
 
 
 # === Web Server ===
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 motor==3.3.1
+pymongo==4.5.0
 beanie==1.25.0
-pydantic[email]==2.5.0
-pydantic-settings==2.1.0
+pydantic[email]==2.11.7
+pydantic-settings==2.8.1
 python-jose[cryptography]==3.3.0
+PyJWT==2.9.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.1.1
+argon2-cffi==23.1.0
 python-multipart==0.0.6
